@@ -11,6 +11,9 @@ import javax.imageio.ImageIO;
 import java.util.function.Consumer;
 
 public class MainMenuPanel extends JPanel {
+    private static final int CARD_ICON_SIZE = 60;
+    private static final int CARD_ICON_BOX_SIZE = 86;
+    private static final int CARD_ICON_TOP_GAP = 18;
     private static final Color BG = new Color(253, 251, 247);
     private static final Color CARD = Color.WHITE;
     private static final Color MILK = new Color(250, 246, 239);
@@ -101,7 +104,7 @@ public class MainMenuPanel extends JPanel {
         buttons.setAlignmentX(Component.LEFT_ALIGNMENT);
         JButton start = solidButton("Почати створення   →", 205, 50);
         start.addActionListener(e -> navigator.accept("CONSTRUCTOR"));
-        JButton more = outlineButton("▱  Дізнатися більше про вишиванку", 270, 50, 12);
+        JButton more = heroInfoButton("Дізнатися більше про вишиванку", "/hero_button_book_icon.png", 225, 48, 14);
         more.addActionListener(e -> navigator.accept("HISTORY_PAGE"));
         buttons.add(start);
         buttons.add(more);
@@ -121,38 +124,52 @@ public class MainMenuPanel extends JPanel {
     private JPanel createFeatureCards() {
         JPanel grid = new JPanel(new GridLayout(1, 4, 18, 0));
         grid.setOpaque(false);
-        grid.setPreferredSize(new Dimension(930, 238));
-        grid.setMaximumSize(new Dimension(Integer.MAX_VALUE, 245));
-        grid.add(sectionCard("✎", "Конструктор", "Створи вишиванку своєї мрії крок за кроком у зручному редакторі.", "Відкрити", "CONSTRUCTOR"));
-        grid.add(sectionCard("✣", "Орнаменти", "Велика бібліотека орнаментів на будь-який смак та регіон.", "Перейти", "ORNAMENTS"));
-        grid.add(sectionCard("♢", "Ідеї", "Готові дизайни, сучасні рішення та приклади для натхнення.", "Переглянути", "IDEAS"));
-        grid.add(sectionCard("▤", "Історія", "Дізнайся більше про традиції, символіку та історію української вишиванки.", "Відкрити", "HISTORY_PAGE"));
+        grid.setPreferredSize(new Dimension(930, 258));
+        grid.setMaximumSize(new Dimension(Integer.MAX_VALUE, 265));
+
+        grid.add(sectionCard(
+                "/icon_constructor.png",
+                "Конструктор",
+                "Створи вишиванку своєї мрії крок за кроком у зручному редакторі.",
+                "Відкрити конструктор",
+                "CONSTRUCTOR"
+        ));
+
+        grid.add(sectionCard(
+                "/icon_ornaments.png",
+                "Орнаменти",
+                "Велика бібліотека орнаментів на будь-який смак та регіон.",
+                "Перейти до орнаментів",
+                "ORNAMENTS"
+        ));
+
+        grid.add(sectionCard(
+                "/icon_ideas.png",
+                "Ідеї",
+                "Готові дизайни, сучасні рішення та приклади для натхнення.",
+                "Переглянути ідеї",
+                "IDEAS"
+        ));
+
+        grid.add(sectionCard(
+                "/icon_history.png",
+                "Історія",
+                "Дізнайся більше про традиції, символіку та історію української вишиванки.",
+                "Відкрити історію",
+                "HISTORY_PAGE"
+        ));
+
         return grid;
     }
 
-    private JPanel sectionCard(String iconText, String title, String desc, String btnText, String target) {
+    private JPanel sectionCard(String iconPath, String title, String desc, String btnText, String target) {
         RoundedPanel card = new RoundedPanel(22, CARD);
         card.setLayout(new BoxLayout(card, BoxLayout.Y_AXIS));
-        card.setBorder(new EmptyBorder(20, 18, 18, 18));
+        card.setBorder(new EmptyBorder(18, 8, 18, 8));
         card.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
         card.addMouseListener(new MouseAdapter() { @Override public void mouseClicked(MouseEvent e) { navigator.accept(target); }});
 
-        JLabel icon = new JLabel(iconText, SwingConstants.CENTER) {
-            @Override protected void paintComponent(Graphics g) {
-                Graphics2D g2 = (Graphics2D) g.create();
-                g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-                g2.setColor(new Color(255, 249, 245));
-                g2.fillRoundRect(0, 0, getWidth() - 1, getHeight() - 1, 15, 15);
-                g2.setColor(new Color(232, 218, 204));
-                g2.drawRoundRect(0, 0, getWidth() - 1, getHeight() - 1, 15, 15);
-                g2.dispose();
-                super.paintComponent(g);
-            }
-        };
-        icon.setFont(new Font("Serif", Font.BOLD, 38));
-        icon.setForeground(RED);
-        icon.setPreferredSize(new Dimension(76, 62));
-        icon.setMaximumSize(new Dimension(76, 62));
+        ImageIconTile icon = new ImageIconTile(iconPath, 74, 62);
         icon.setAlignmentX(Component.CENTER_ALIGNMENT);
 
         JLabel name = new JLabel(title);
@@ -160,33 +177,27 @@ public class MainMenuPanel extends JPanel {
         name.setForeground(TEXT);
         name.setAlignmentX(Component.CENTER_ALIGNMENT);
 
-        JTextArea description = new JTextArea(desc);
-        description.setOpaque(false);
-        description.setEditable(false);
-        description.setFocusable(false);
-        description.setLineWrap(true);
-        description.setWrapStyleWord(true);
-        description.setFont(new Font("SansSerif", Font.PLAIN, 13));
-        description.setForeground(MUTED);
-        description.setRows(3);
-        description.setMaximumSize(new Dimension(200, 58));
+        CenteredText description = new CenteredText(desc, MUTED, new Font("SansSerif", Font.PLAIN, 12), 178, 76);
         description.setAlignmentX(Component.CENTER_ALIGNMENT);
 
-        JButton link = outlineButton(btnText + "  →", 170, 38, 12);
+        JButton link = cardTextButton(btnText + " →", 202, 38, 10);
         link.addActionListener(e -> navigator.accept(target));
         link.setForeground(RED);
+        link.setHorizontalAlignment(SwingConstants.CENTER);
+        link.setMargin(new Insets(0, 4, 0, 4));
+        link.setMaximumSize(new Dimension(202, 38));
+        link.setPreferredSize(new Dimension(202, 38));
         link.setAlignmentX(Component.CENTER_ALIGNMENT);
 
         card.add(icon);
-        card.add(Box.createVerticalStrut(12));
+        card.add(Box.createVerticalStrut(6));
         card.add(name);
-        card.add(Box.createVerticalStrut(8));
+        card.add(Box.createVerticalStrut(4));
         card.add(description);
         card.add(Box.createVerticalGlue());
         card.add(link);
         return card;
     }
-
     private JPanel createRecentProjectsCard() {
         RoundedPanel card = sideCard("Останні проєкти", "Показати всі", "SAVED", 350);
         card.add(projectItem(new PixelBadge(48, 0), "Червоний орнамент", "Змінено 2 год тому", "CONSTRUCTOR"));
@@ -338,6 +349,92 @@ public class MainMenuPanel extends JPanel {
         return b;
     }
 
+
+    private JButton cardTextButton(String text, int w, int h, int fontSize) {
+        JButton b = new JButton(text) {
+            @Override protected void paintComponent(Graphics g) {
+                Graphics2D g2 = (Graphics2D) g.create();
+                g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+                g2.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
+
+                g2.setColor(new Color(255, 253, 250));
+                g2.fillRoundRect(0, 0, getWidth() - 1, getHeight() - 1, 13, 13);
+                g2.setColor(new Color(230, 221, 212));
+                g2.drawRoundRect(0, 0, getWidth() - 1, getHeight() - 1, 13, 13);
+
+                g2.setFont(getFont());
+                g2.setColor(getForeground());
+                FontMetrics fm = g2.getFontMetrics();
+
+                String value = getText();
+                int available = getWidth() - 12;
+                while (fm.stringWidth(value) > available && getFont().getSize() > 8) {
+                    setFont(getFont().deriveFont((float) getFont().getSize() - 1));
+                    g2.setFont(getFont());
+                    fm = g2.getFontMetrics();
+                }
+
+                int x = (getWidth() - fm.stringWidth(value)) / 2;
+                int y = (getHeight() - fm.getHeight()) / 2 + fm.getAscent();
+                g2.drawString(value, x, y);
+                g2.dispose();
+            }
+        };
+
+        b.setFont(new Font("SansSerif", Font.PLAIN, fontSize));
+        b.setForeground(RED);
+        b.setContentAreaFilled(false);
+        b.setBorderPainted(false);
+        b.setFocusPainted(false);
+        b.setOpaque(false);
+        b.setPreferredSize(new Dimension(w, h));
+        b.setMaximumSize(new Dimension(w, h));
+        b.setHorizontalAlignment(SwingConstants.CENTER);
+        b.setMargin(new Insets(0, 18, 0, 14));
+        b.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+        return b;
+    }
+
+
+    private JButton heroInfoButton(String text, String iconPath, int w, int h, int fontSize) {
+        JButton b = new JButton(text) {
+            @Override protected void paintComponent(Graphics g) {
+                Graphics2D g2 = (Graphics2D) g.create();
+                g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+                g2.setColor(new Color(255, 253, 250));
+                g2.fillRoundRect(0, 0, getWidth() - 1, getHeight() - 1, 13, 13);
+                g2.setColor(new Color(230, 221, 212));
+                g2.drawRoundRect(0, 0, getWidth() - 1, getHeight() - 1, 13, 13);
+                g2.dispose();
+                super.paintComponent(g);
+            }
+        };
+
+        b.setFont(new Font("SansSerif", Font.PLAIN, fontSize));
+        b.setForeground(new Color(65, 61, 56));
+        b.setContentAreaFilled(false);
+        b.setBorderPainted(false);
+        b.setFocusPainted(false);
+        b.setOpaque(false);
+        b.setPreferredSize(new Dimension(w, h));
+        b.setMaximumSize(new Dimension(w, h));
+        b.setHorizontalAlignment(SwingConstants.LEFT);
+        b.setIconTextGap(12);
+        b.setMargin(new Insets(0, 18, 0, 14));
+        b.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+
+        try {
+            BufferedImage img = loadImage(iconPath);
+            if (img != null) {
+                Image scaled = img.getScaledInstance(24, 24, Image.SCALE_SMOOTH);
+                b.setIcon(new ImageIcon(scaled));
+            }
+        } catch (Exception ignored) {
+        }
+
+        return b;
+    }
+
     private JButton outlineButton(String text, int w, int h, int fontSize) {
         JButton b = new JButton(text) {
             @Override protected void paintComponent(Graphics g) {
@@ -358,6 +455,8 @@ public class MainMenuPanel extends JPanel {
         b.setFocusPainted(false);
         b.setPreferredSize(new Dimension(w, h));
         b.setMaximumSize(new Dimension(w, h));
+        b.setHorizontalAlignment(SwingConstants.CENTER);
+        b.setMargin(new Insets(0, 4, 0, 4));
         b.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
         return b;
     }
@@ -385,6 +484,191 @@ public class MainMenuPanel extends JPanel {
 
         System.out.println("Не знайдено фото для головної: " + clean);
         return null;
+    }
+
+
+
+    private static class CenteredText extends JComponent {
+        private final String text;
+        private final Color color;
+        private final Font font;
+        private final int prefW;
+        private final int prefH;
+
+        CenteredText(String text, Color color, Font font, int prefW, int prefH) {
+            this.text = text;
+            this.color = color;
+            this.font = font;
+            this.prefW = prefW;
+            this.prefH = prefH;
+
+            Dimension size = new Dimension(prefW, prefH);
+            setPreferredSize(size);
+            setMinimumSize(size);
+            setMaximumSize(size);
+            setOpaque(false);
+        }
+
+        @Override
+        protected void paintComponent(Graphics g) {
+            super.paintComponent(g);
+
+            Graphics2D g2 = (Graphics2D) g.create();
+            g2.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
+            g2.setFont(font);
+            g2.setColor(color);
+
+            FontMetrics fm = g2.getFontMetrics();
+            java.util.List<String> lines = wrapText(text, fm, prefW - 8);
+
+            int lineHeight = fm.getHeight();
+            int totalHeight = lines.size() * lineHeight;
+            int y = Math.max(fm.getAscent(), (getHeight() - totalHeight) / 2 + fm.getAscent());
+
+            for (String line : lines) {
+                int x = (getWidth() - fm.stringWidth(line)) / 2;
+                g2.drawString(line, x, y);
+                y += lineHeight;
+            }
+
+            g2.dispose();
+        }
+
+        private java.util.List<String> wrapText(String source, FontMetrics fm, int maxWidth) {
+            java.util.List<String> lines = new java.util.ArrayList<>();
+            String[] words = source.trim().split("\\s+");
+            StringBuilder current = new StringBuilder();
+
+            for (String word : words) {
+                String candidate = current.length() == 0 ? word : current + " " + word;
+
+                if (fm.stringWidth(candidate) <= maxWidth) {
+                    current.setLength(0);
+                    current.append(candidate);
+                } else {
+                    if (current.length() > 0) {
+                        lines.add(current.toString());
+                    }
+
+                    if (fm.stringWidth(word) <= maxWidth) {
+                        current.setLength(0);
+                        current.append(word);
+                    } else {
+                        StringBuilder part = new StringBuilder();
+                        for (int i = 0; i < word.length(); i++) {
+                            String c = part.toString() + word.charAt(i);
+                            if (fm.stringWidth(c) > maxWidth && part.length() > 0) {
+                                lines.add(part.toString());
+                                part.setLength(0);
+                            }
+                            part.append(word.charAt(i));
+                        }
+                        current.setLength(0);
+                        current.append(part);
+                    }
+                }
+            }
+
+            if (current.length() > 0) {
+                lines.add(current.toString());
+            }
+
+            if (lines.size() > 4) {
+                java.util.List<String> shortened = new java.util.ArrayList<>(lines.subList(0, 4));
+                String last = shortened.get(3);
+                while (fm.stringWidth(last + "…") > maxWidth && last.length() > 1) {
+                    last = last.substring(0, last.length() - 1);
+                }
+                shortened.set(3, last + "…");
+                return shortened;
+            }
+
+            return lines;
+        }
+    }
+
+    private static class ImageIconTile extends JComponent {
+        private final BufferedImage image;
+        private final int width;
+        private final int height;
+
+        ImageIconTile(String imagePath, int width, int height) {
+            this.width = width;
+            this.height = height;
+            this.image = loadImage(imagePath);
+            setPreferredSize(new Dimension(width, height));
+            setMaximumSize(new Dimension(width, height));
+            setMinimumSize(new Dimension(width, height));
+        }
+
+        @Override protected void paintComponent(Graphics g) {
+            Graphics2D g2 = (Graphics2D) g.create();
+            g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+            g2.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BICUBIC);
+
+            if (image != null) {
+                Rectangle crop = findContentBounds(image);
+
+                int availableW = width;
+                int availableH = height;
+                double scale = Math.min(availableW / (double) crop.width, availableH / (double) crop.height);
+                int iw = (int) Math.round(crop.width * scale);
+                int ih = (int) Math.round(crop.height * scale);
+                int x = (width - iw) / 2;
+                int y = (height - ih) / 2;
+
+                BufferedImage cropped = image.getSubimage(crop.x, crop.y, crop.width, crop.height);
+                g2.drawImage(cropped, x, y, iw, ih, null);
+            } else {
+                g2.setColor(new Color(255, 249, 245));
+                g2.fillRoundRect(0, 0, width - 1, height - 1, 15, 15);
+                g2.setColor(new Color(232, 218, 204));
+                g2.drawRoundRect(0, 0, width - 1, height - 1, 15, 15);
+                g2.setColor(RED);
+                g2.setFont(new Font("SansSerif", Font.BOLD, 34));
+                FontMetrics fm = g2.getFontMetrics();
+                String fallback = "✦";
+                g2.drawString(fallback, (width - fm.stringWidth(fallback)) / 2, (height + fm.getAscent()) / 2 - 4);
+            }
+            g2.dispose();
+        }
+
+        private Rectangle findContentBounds(BufferedImage img) {
+            int minX = img.getWidth();
+            int minY = img.getHeight();
+            int maxX = 0;
+            int maxY = 0;
+
+            for (int y = 0; y < img.getHeight(); y++) {
+                for (int x = 0; x < img.getWidth(); x++) {
+                    int argb = img.getRGB(x, y);
+                    int a = (argb >>> 24) & 0xff;
+                    int r = (argb >>> 16) & 0xff;
+                    int g = (argb >>> 8) & 0xff;
+                    int b = argb & 0xff;
+
+                    // Білий фон не враховуємо, щоб іконка не була маленькою через великі поля PNG.
+                    boolean isAlmostWhite = r > 246 && g > 246 && b > 246;
+                    if (a > 20 && !isAlmostWhite) {
+                        minX = Math.min(minX, x);
+                        minY = Math.min(minY, y);
+                        maxX = Math.max(maxX, x);
+                        maxY = Math.max(maxY, y);
+                    }
+                }
+            }
+
+            if (minX > maxX || minY > maxY) {
+                return new Rectangle(0, 0, img.getWidth(), img.getHeight());
+            }
+
+            int pad = 20;
+            minX = Math.max(0, minX - pad);
+            minY = Math.max(0, minY - pad);
+            maxX = Math.min(img.getWidth() - 1, maxX + pad);
+            maxY = Math.min(img.getHeight() - 1, maxY + pad);
+            return new Rectangle(minX, minY, maxX - minX + 1, maxY - minY + 1);
+        }
     }
 
     private static class ImageHeroPanel extends RoundedPanel {
@@ -503,4 +787,122 @@ public class MainMenuPanel extends JPanel {
             g2.dispose();
         }
     }
+    private ImageIcon loadCardIcon(String path, int targetW, int targetH) {
+        try {
+            java.net.URL url = getClass().getResource(path);
+            if (url == null && !path.startsWith("/")) {
+                url = getClass().getResource("/" + path);
+            }
+            if (url == null) {
+                return new ImageIcon();
+            }
+
+            java.awt.image.BufferedImage original = javax.imageio.ImageIO.read(url);
+            java.awt.image.BufferedImage trimmed = trimTransparentOrWhite(original);
+
+            int w = trimmed.getWidth();
+            int h = trimmed.getHeight();
+            double scale = Math.min((double) targetW / w, (double) targetH / h);
+            int nw = Math.max(1, (int) Math.round(w * scale));
+            int nh = Math.max(1, (int) Math.round(h * scale));
+
+            Image scaled = trimmed.getScaledInstance(nw, nh, Image.SCALE_SMOOTH);
+
+            java.awt.image.BufferedImage canvas =
+                    new java.awt.image.BufferedImage(targetW, targetH, java.awt.image.BufferedImage.TYPE_INT_ARGB);
+            Graphics2D g = canvas.createGraphics();
+            g.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BICUBIC);
+            g.setRenderingHint(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_QUALITY);
+            g.drawImage(scaled, (targetW - nw) / 2, (targetH - nh) / 2, null);
+            g.dispose();
+
+            return new ImageIcon(canvas);
+        } catch (Exception ex) {
+            return new ImageIcon();
+        }
+    }
+
+    private java.awt.image.BufferedImage trimTransparentOrWhite(java.awt.image.BufferedImage img) {
+        int minX = img.getWidth(), minY = img.getHeight();
+        int maxX = -1, maxY = -1;
+
+        for (int y = 0; y < img.getHeight(); y++) {
+            for (int x = 0; x < img.getWidth(); x++) {
+                int argb = img.getRGB(x, y);
+                int a = (argb >>> 24) & 0xff;
+                int r = (argb >>> 16) & 0xff;
+                int g = (argb >>> 8) & 0xff;
+                int b = argb & 0xff;
+
+                boolean isContent = a > 30 && !(r > 246 && g > 246 && b > 246);
+                if (isContent) {
+                    minX = Math.min(minX, x);
+                    minY = Math.min(minY, y);
+                    maxX = Math.max(maxX, x);
+                    maxY = Math.max(maxY, y);
+                }
+            }
+        }
+
+        if (maxX < minX || maxY < minY) {
+            return img;
+        }
+
+        int pad = 8;
+        minX = Math.max(0, minX - pad);
+        minY = Math.max(0, minY - pad);
+        maxX = Math.min(img.getWidth() - 1, maxX + pad);
+        maxY = Math.min(img.getHeight() - 1, maxY + pad);
+
+        return img.getSubimage(minX, minY, maxX - minX + 1, maxY - minY + 1);
+    }
+
+    private static class IconBox extends JPanel {
+        private final Image image;
+        private final int iconSize;
+
+        IconBox(String path, int iconSize) {
+            this.iconSize = iconSize;
+            this.image = loadImage(path);
+
+            setOpaque(false);
+            Dimension size = new Dimension(82, 70);
+            setPreferredSize(size);
+            setMinimumSize(size);
+            setMaximumSize(size);
+        }
+
+        private Image loadImage(String path) {
+            try {
+                java.net.URL url = getClass().getResource(path);
+                if (url == null && !path.startsWith("/")) {
+                    url = getClass().getResource("/" + path);
+                }
+                if (url != null) {
+                    return javax.imageio.ImageIO.read(url);
+                }
+            } catch (Exception ignored) {
+            }
+            return null;
+        }
+
+        @Override
+        protected void paintComponent(Graphics g) {
+            super.paintComponent(g);
+
+            if (image == null) return;
+
+            Graphics2D g2 = (Graphics2D) g.create();
+            g2.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BICUBIC);
+            g2.setRenderingHint(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_QUALITY);
+            g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+
+            int x = (getWidth() - iconSize) / 2;
+            int y = (getHeight() - iconSize) / 2;
+
+            g2.drawImage(image, x, y, iconSize, iconSize, null);
+            g2.dispose();
+        }
+    }
+
 }
