@@ -46,8 +46,8 @@ public class TopNavigationPanel extends JPanel {
         JPanel wrap = new JPanel(new BorderLayout());
         wrap.setOpaque(false);
         wrap.setBorder(new EmptyBorder(8, 20, 8, 6));
-        wrap.setPreferredSize(new Dimension(330, 88));
-        wrap.setMinimumSize(new Dimension(300, 88));
+        wrap.setPreferredSize(new Dimension(285, 88));
+        wrap.setMinimumSize(new Dimension(290, 88));
         wrap.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
         wrap.addMouseListener(new MouseAdapter() {
             @Override public void mouseClicked(MouseEvent e) {
@@ -60,15 +60,15 @@ public class TopNavigationPanel extends JPanel {
     }
 
     private JPanel createTabs() {
-        JPanel tabs = new JPanel(new FlowLayout(FlowLayout.CENTER, 14, 16));
+        JPanel tabs = new JPanel(new FlowLayout(FlowLayout.CENTER, 6, 16));
         tabs.setOpaque(false);
 
-        addTab(tabs, "Головна", "MAIN_PAGE", 112);
-        addTab(tabs, "Конструктор", "CONSTRUCTOR", 124);
-        addTab(tabs, "Орнаменти", "ORNAMENTS", 118);
-        addTab(tabs, "Ідеї", "IDEAS", 76);
-        addTab(tabs, "Історія", "HISTORY_PAGE", 96);
-        addTab(tabs, "Моя колекція", "SAVED", 136);
+        addTab(tabs, "Головна", "MAIN_PAGE", 96);
+        addTab(tabs, "Конструктор", "CONSTRUCTOR", 112);
+        addTab(tabs, "Орнаменти", "ORNAMENTS", 106);
+        addTab(tabs, "Ідеї", "IDEAS", 64);
+        addTab(tabs, "Історія", "HISTORY_PAGE", 82);
+        addTab(tabs, "Моя колекція", "SAVED", 118);
 
         return tabs;
     }
@@ -93,18 +93,29 @@ public class TopNavigationPanel extends JPanel {
     }
 
     private JPanel createActionIcons() {
-        JPanel icons = new JPanel(new FlowLayout(FlowLayout.RIGHT, 8, 24));
-        icons.setOpaque(false);
-        icons.setBorder(new EmptyBorder(0, 0, 0, 20));
-        icons.setPreferredSize(new Dimension(275, 88));
-        icons.setMinimumSize(new Dimension(260, 88));
-        icons.add(iconButton(0, "Пошук"));
-        icons.add(iconButton(1, "Назад"));
-        icons.add(iconButton(2, "Вперед"));
-        icons.add(iconButton(3, "Налаштування"));
-        icons.add(iconButton(4, "Допомога"));
-        icons.add(profileButton());
-        return icons;
+        JPanel wrap = new JPanel(new BorderLayout());
+        wrap.setOpaque(false);
+        wrap.setBorder(new EmptyBorder(6, 0, 6, 20));
+        wrap.setPreferredSize(new Dimension(285, 88));
+        wrap.setMinimumSize(new Dimension(270, 88));
+
+        RightTopAuthorImage image = new RightTopAuthorImage();
+        image.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+        image.setToolTipText("Шкут Анна ІПЗ-1. Усі права захищені");
+        image.addMouseListener(new MouseAdapter() {
+            @Override
+            public void mouseClicked(MouseEvent e) {
+                JOptionPane.showMessageDialog(
+                        TopNavigationPanel.this,
+                        "Шкут Анна ІПЗ-1\nУсі права захищені",
+                        "Про автора",
+                        JOptionPane.INFORMATION_MESSAGE
+                );
+            }
+        });
+
+        wrap.add(image, BorderLayout.CENTER);
+        return wrap;
     }
 
     private JButton iconButton(int type, String tip) {
@@ -232,11 +243,118 @@ public class TopNavigationPanel extends JPanel {
         }
     }
 
+
+    private static class RightTopAuthorImage extends JComponent {
+        private BufferedImage image;
+
+        RightTopAuthorImage() {
+            setPreferredSize(new Dimension(270, 64));
+            setMinimumSize(new Dimension(250, 64));
+            image = loadImage();
+        }
+
+        private BufferedImage loadImage() {
+            try {
+                URL url = TopNavigationPanel.class.getResource("/logo_vyshyvanka_right_top.png");
+                if (url != null) {
+                    return cropWhiteMargins(ImageIO.read(url));
+                }
+
+                File file = new File("src/main/resources/logo_vyshyvanka_right_top.png");
+                if (file.exists()) {
+                    return cropWhiteMargins(ImageIO.read(file));
+                }
+            } catch (IOException ignored) {
+            }
+
+            System.out.println("Не знайдено зображення: logo_vyshyvanka_right_top.png");
+            return null;
+        }
+
+        private BufferedImage cropWhiteMargins(BufferedImage source) {
+            int minX = source.getWidth();
+            int minY = source.getHeight();
+            int maxX = -1;
+            int maxY = -1;
+
+            for (int y = 0; y < source.getHeight(); y++) {
+                for (int x = 0; x < source.getWidth(); x++) {
+                    int argb = source.getRGB(x, y);
+                    int a = (argb >>> 24) & 0xff;
+                    int r = (argb >>> 16) & 0xff;
+                    int g = (argb >>> 8) & 0xff;
+                    int b = argb & 0xff;
+
+                    boolean isNotWhite = a > 20 && !(r > 242 && g > 242 && b > 242);
+                    if (isNotWhite) {
+                        minX = Math.min(minX, x);
+                        minY = Math.min(minY, y);
+                        maxX = Math.max(maxX, x);
+                        maxY = Math.max(maxY, y);
+                    }
+                }
+            }
+
+            if (maxX < minX || maxY < minY) {
+                return source;
+            }
+
+            int padding = 8;
+            minX = Math.max(0, minX - padding);
+            minY = Math.max(0, minY - padding);
+            maxX = Math.min(source.getWidth() - 1, maxX + padding);
+            maxY = Math.min(source.getHeight() - 1, maxY + padding);
+
+            return source.getSubimage(minX, minY, maxX - minX + 1, maxY - minY + 1);
+        }
+
+        @Override
+        protected void paintComponent(Graphics g) {
+            super.paintComponent(g);
+
+            Graphics2D g2 = (Graphics2D) g.create();
+            g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+            g2.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BICUBIC);
+            g2.setRenderingHint(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_QUALITY);
+
+            if (image != null) {
+                int maxW = getWidth();
+                int maxH = 50;
+
+                double scale = Math.min((double) maxW / image.getWidth(), (double) maxH / image.getHeight());
+                int w = (int) Math.round(image.getWidth() * scale);
+                int h = (int) Math.round(image.getHeight() * scale);
+
+                int x = getWidth() - w;
+                int y = (getHeight() - h) / 2;
+
+                g2.drawImage(image, x, y, w, h, null);
+            } else {
+                drawFallback(g2);
+            }
+
+            g2.dispose();
+        }
+
+        private void drawFallback(Graphics2D g2) {
+            g2.setColor(new Color(245, 238, 230));
+            g2.fillRoundRect(0, 10, getWidth() - 1, getHeight() - 20, 18, 18);
+
+            g2.setColor(new Color(203, 23, 35));
+            g2.setFont(new Font("Serif", Font.BOLD, 18));
+            g2.drawString("Шкут Анна", 24, 35);
+
+            g2.setColor(new Color(70, 62, 55));
+            g2.setFont(new Font("Serif", Font.PLAIN, 13));
+            g2.drawString("ІПЗ-1     Усі права захищені", 24, 55);
+        }
+    }
+
     private static class HeaderLogoImage extends JComponent {
         private BufferedImage logo;
 
         HeaderLogoImage() {
-            setPreferredSize(new Dimension(300, 68));
+            setPreferredSize(new Dimension(270, 64));
             logo = loadLogo();
         }
 
@@ -266,7 +384,7 @@ public class TopNavigationPanel extends JPanel {
 
             if (logo != null) {
                 int maxW = getWidth();
-                int maxH = getHeight();
+                int maxH = 50;
                 double scale = Math.min((double) maxW / logo.getWidth(), (double) maxH / logo.getHeight());
                 int w = (int) Math.round(logo.getWidth() * scale);
                 int h = (int) Math.round(logo.getHeight() * scale);

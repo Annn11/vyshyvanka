@@ -1,53 +1,27 @@
 package ui;
 
 import model.ProjectPreview;
+
 import javax.swing.*;
 import java.awt.*;
 import java.util.ArrayList;
 import java.util.List;
 
 public class SavedProjectsPanel extends JPanel {
-    private final List<ProjectPreview> userProjects = new ArrayList<>();
+    private static final List<ProjectPreview> USER_PROJECTS = new ArrayList<>();
+    private static final List<SavedProjectsPanel> OPEN_PANELS = new ArrayList<>();
+    private static boolean demoLoaded = false;
+
     private final JPanel gridContainer;
 
     public SavedProjectsPanel() {
+        loadDemoProjectsOnce();
+        OPEN_PANELS.add(this);
+
         setOpaque(false);
         setLayout(new BoxLayout(this, BoxLayout.Y_AXIS));
         setBorder(BorderFactory.createEmptyBorder(30, 40, 40, 40));
 
-        // Традиційні тестові візерунки для заповнення сторінки
-        Color R = new Color(211, 47, 47);   // Червоний
-        Color B = new Color(40, 40, 40);    // Чорний
-        Color W = new Color(220, 215, 205); // Білий/кремовий
-        Color G = new Color(30, 120, 60);   // Зелений
-
-        Color[][] pattern1 = {
-                {null, W,    null, null, W,    null},
-                {W,    W,    W,    W,    W,    W   },
-                {null, W,    W,    W,    W,    null},
-                {W,    W,    W,    W,    W,    W   },
-                {null, W,    null, null, W,    null}
-        };
-
-        Color[][] pattern2 = {
-                {B,    null, B,    B,    null, B   },
-                {null, R,    null, null, R,    null},
-                {B,    null, B,    B,    null, B   },
-                {null, R,    null, null, R,    null},
-                {B,    null, B,    B,    null, B   }
-        };
-
-        Color[][] pattern3 = {
-                {G,    G,    null, null, G,    G   },
-                {null, null, R,    R,    null, null},
-                {G,    G,    null, null, G,    G   }
-        };
-
-        userProjects.add(new ProjectPreview("Моя сорочка (Полтавський стиль)", "Збережено: 2 години тому", pattern1));
-        userProjects.add(new ProjectPreview("Борщівський рукав v2", "Збережено: вчора", pattern2));
-        userProjects.add(new ProjectPreview("Весняний орнамент манжету", "Збережено: 3 дні тому", pattern3));
-
-        // Заголовок сторінки
         JLabel headerTitle = new JLabel("Ваша майстерня");
         headerTitle.setFont(new Font("SansSerif", Font.BOLD, 22));
         headerTitle.setForeground(new Color(40, 40, 40));
@@ -55,6 +29,7 @@ public class SavedProjectsPanel extends JPanel {
         add(headerTitle);
 
         add(Box.createVerticalStrut(4));
+
         JLabel headerDesc = new JLabel("Тут зберігаються всі створені вами схеми вишивки. Ви можете продовжити редагування у будь-який момент.");
         headerDesc.setFont(new Font("SansSerif", Font.PLAIN, 14));
         headerDesc.setForeground(new Color(110, 110, 110));
@@ -63,7 +38,6 @@ public class SavedProjectsPanel extends JPanel {
 
         add(Box.createVerticalStrut(30));
 
-        // Контейнер-сітка для карток проєктів
         gridContainer = new JPanel(new FlowLayout(FlowLayout.LEFT, 24, 24));
         gridContainer.setOpaque(false);
         gridContainer.setAlignmentX(Component.LEFT_ALIGNMENT);
@@ -72,11 +46,65 @@ public class SavedProjectsPanel extends JPanel {
         add(gridContainer);
     }
 
+    public static void addProjectToCollection(ProjectPreview project) {
+        loadDemoProjectsOnce();
+        USER_PROJECTS.add(0, project);
+
+        for (SavedProjectsPanel panel : new ArrayList<>(OPEN_PANELS)) {
+            panel.renderGrid();
+        }
+    }
+
+    private static void loadDemoProjectsOnce() {
+        if (demoLoaded) return;
+        demoLoaded = true;
+
+        Color R = new Color(211, 47, 47);
+        Color B = new Color(40, 40, 40);
+        Color W = new Color(220, 215, 205);
+        Color G = new Color(30, 120, 60);
+
+        Color[][] pattern1 = {
+                {null, W, null, null, W, null},
+                {W, W, W, W, W, W},
+                {null, W, W, W, W, null},
+                {W, W, W, W, W, W},
+                {null, W, null, null, W, null}
+        };
+
+        Color[][] pattern2 = {
+                {B, null, B, B, null, B},
+                {null, R, null, null, R, null},
+                {B, null, B, B, null, B},
+                {null, R, null, null, R, null},
+                {B, null, B, B, null, B}
+        };
+
+        Color[][] pattern3 = {
+                {G, G, null, null, G, G},
+                {null, null, R, R, null, null},
+                {G, G, null, null, G, G}
+        };
+
+        USER_PROJECTS.add(new ProjectPreview("Моя сорочка (Полтавський стиль)", "Збережено: 2 години тому", pattern1));
+        USER_PROJECTS.add(new ProjectPreview("Борщівський рукав v2", "Збережено: вчора", pattern2));
+        USER_PROJECTS.add(new ProjectPreview("Весняний орнамент манжету", "Збережено: 3 дні тому", pattern3));
+    }
+
     private void renderGrid() {
         gridContainer.removeAll();
-        for (ProjectPreview project : userProjects) {
-            gridContainer.add(createSavedProjectCard(project));
+
+        if (USER_PROJECTS.isEmpty()) {
+            JLabel empty = new JLabel("Поки що немає збережених проєктів.");
+            empty.setFont(new Font("SansSerif", Font.PLAIN, 14));
+            empty.setForeground(new Color(120, 112, 104));
+            gridContainer.add(empty);
+        } else {
+            for (ProjectPreview project : new ArrayList<>(USER_PROJECTS)) {
+                gridContainer.add(createSavedProjectCard(project));
+            }
         }
+
         gridContainer.revalidate();
         gridContainer.repaint();
     }
@@ -87,11 +115,9 @@ public class SavedProjectsPanel extends JPanel {
         card.setBorder(BorderFactory.createEmptyBorder(16, 18, 16, 18));
         card.setPreferredSize(new Dimension(340, 95));
 
-        // Прев'ю сітки вишивки ліворуч
         PatternPreviewPanel preview = new PatternPreviewPanel(project.getPatternPreview());
         card.add(preview, BorderLayout.WEST);
 
-        // Текстовий блок по центру
         JPanel textPanel = new JPanel();
         textPanel.setOpaque(false);
         textPanel.setLayout(new BoxLayout(textPanel, BoxLayout.Y_AXIS));
@@ -110,11 +136,9 @@ public class SavedProjectsPanel extends JPanel {
         textPanel.add(dateLabel);
         card.add(textPanel, BorderLayout.CENTER);
 
-        // Керування карткою праворуч (Кнопка редагування та видалення)
         JPanel controls = new JPanel(new GridLayout(2, 1, 0, 6));
         controls.setOpaque(false);
 
-        // Кнопка відкриття (олівець / стрілочка)
         JButton openBtn = new JButton("✎") {
             @Override
             protected void paintComponent(Graphics g) {
@@ -129,7 +153,6 @@ public class SavedProjectsPanel extends JPanel {
         openBtn.setToolTipText("Відкрити в конструкторі");
         configureIconButton(openBtn, new Color(140, 110, 80));
 
-        // Кнопка видалення (кошик / хрестик)
         JButton deleteBtn = new JButton("✕") {
             @Override
             protected void paintComponent(Graphics g) {
@@ -145,12 +168,16 @@ public class SavedProjectsPanel extends JPanel {
         configureIconButton(deleteBtn, new Color(211, 47, 47));
 
         deleteBtn.addActionListener(e -> {
-            int confirm = JOptionPane.showConfirmDialog(this,
+            int confirm = JOptionPane.showConfirmDialog(
+                    this,
                     "Ви дійсно хочете видалити проєкт \"" + project.getName() + "\"?",
-                    "Підтвердження видалення", JOptionPane.YES_NO_OPTION);
+                    "Підтвердження видалення",
+                    JOptionPane.YES_NO_OPTION
+            );
+
             if (confirm == JOptionPane.YES_OPTION) {
-                userProjects.remove(project);
-                renderGrid();
+                USER_PROJECTS.remove(project);
+                renderAllPanels();
             }
         });
 
@@ -159,6 +186,12 @@ public class SavedProjectsPanel extends JPanel {
         card.add(controls, BorderLayout.EAST);
 
         return card;
+    }
+
+    private static void renderAllPanels() {
+        for (SavedProjectsPanel panel : new ArrayList<>(OPEN_PANELS)) {
+            panel.renderGrid();
+        }
     }
 
     private void configureIconButton(JButton btn, Color fgColor) {
