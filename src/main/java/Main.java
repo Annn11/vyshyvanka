@@ -36,9 +36,9 @@ public class Main {
             root.add(topNavHolder[0], BorderLayout.NORTH);
 
             pages.add(new MainMenuPanel(navigate), "MAIN_PAGE");
-            pages.add(new ConstructorPanel(), "CONSTRUCTOR");
-            pages.add(wrapScrollable(new OrnamentsCatalogPanel()), "ORNAMENTS");
-            pages.add(wrapScrollable(new IdeasPanel()), "IDEAS");
+            ConstructorPanel constructorPanel = new ConstructorPanel();
+            pages.add(constructorPanel, "CONSTRUCTOR");
+            pages.add(wrapScrollable(new IdeasPanel(navigate, constructorPanel)), "IDEAS");
             pages.add(wrapScrollable(new SavedProjectsPanel()), "SAVED");
             pages.add(new HistoryPage(pages, cardLayout), "HISTORY_PAGE");
 

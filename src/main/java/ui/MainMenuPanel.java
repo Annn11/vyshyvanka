@@ -122,7 +122,7 @@ public class MainMenuPanel extends JPanel {
     }
 
     private JPanel createFeatureCards() {
-        JPanel grid = new JPanel(new GridLayout(1, 4, 18, 0));
+        JPanel grid = new JPanel(new GridLayout(1, 3, 18, 0));
         grid.setOpaque(false);
         grid.setPreferredSize(new Dimension(930, 258));
         grid.setMaximumSize(new Dimension(Integer.MAX_VALUE, 265));
@@ -136,18 +136,10 @@ public class MainMenuPanel extends JPanel {
         ));
 
         grid.add(sectionCard(
-                "/icon_ornaments.png",
-                "Орнаменти",
-                "Велика бібліотека орнаментів на будь-який смак та регіон.",
-                "Перейти до орнаментів",
-                "ORNAMENTS"
-        ));
-
-        grid.add(sectionCard(
                 "/icon_ideas.png",
-                "Ідеї",
-                "Готові дизайни, сучасні рішення та приклади для натхнення.",
-                "Переглянути ідеї",
+                "Імена",
+                "Підбери ім’я та створи персональний напис для майбутньої вишиванки.",
+                "Переглянути імена",
                 "IDEAS"
         ));
 

@@ -65,8 +65,7 @@ public class TopNavigationPanel extends JPanel {
 
         addTab(tabs, "Головна", "MAIN_PAGE", 96);
         addTab(tabs, "Конструктор", "CONSTRUCTOR", 112);
-        addTab(tabs, "Орнаменти", "ORNAMENTS", 106);
-        addTab(tabs, "Ідеї", "IDEAS", 64);
+        addTab(tabs, "Імена", "IDEAS", 76);
         addTab(tabs, "Історія", "HISTORY_PAGE", 82);
         addTab(tabs, "Моя колекція", "SAVED", 118);
 

@@ -45,6 +45,10 @@ public class ConstructorPanel extends JPanel {
     private boolean[][] pendingStamp = null;
     private Color pendingStampColor = RED;
     private String pendingStampName = null;
+    private boolean pendingStampReusable = false;
+    private boolean[][] selectedOrnamentBase = null;
+    private String selectedOrnamentName = null;
+    private int selectedOrnamentScale = 2;
 
     private boolean verticalSymmetry = false;
     private boolean horizontalSymmetry = false;
@@ -77,6 +81,53 @@ public class ConstructorPanel extends JPanel {
 
         saveState();
     }
+
+    public void loadNamePattern(NamePatternRepository.NamePattern namePattern) {
+        if (namePattern == null) return;
+
+        saveState();
+
+        for (int r = 0; r < ROWS; r++) {
+            Arrays.fill(cells[r], null);
+        }
+
+        int[][] pattern = namePattern.cells();
+        int patternRows = pattern.length;
+        int patternCols = pattern[0].length;
+
+        int startR = Math.max(0, (ROWS - patternRows) / 2);
+        int startC = Math.max(0, (COLS - patternCols) / 2);
+
+        for (int r = 0; r < patternRows; r++) {
+            for (int c = 0; c < patternCols; c++) {
+                int value = pattern[r][c];
+                int rr = startR + r;
+                int cc = startC + c;
+
+                if (rr >= 0 && rr < ROWS && cc >= 0 && cc < COLS) {
+                    if (value == NamePatternRepository.RED_CELL) {
+                        cells[rr][cc] = RED;
+                    } else if (value == NamePatternRepository.BLACK_CELL) {
+                        cells[rr][cc] = new Color(55, 55, 55);
+                    } else {
+                        cells[rr][cc] = null;
+                    }
+                }
+            }
+        }
+
+        pendingStamp = null;
+        pendingStampName = null;
+        pendingStampReusable = false;
+        selectedOrnamentBase = null;
+        selectedOrnamentName = null;
+        lineStart = null;
+        activeTool = Tool.PENCIL;
+        refreshToolButtons();
+        refreshCanvasSize();
+        repaintAll();
+    }
+
 
     private JPanel createLeftColumn() {
         JPanel column = new JPanel(null);
@@ -145,7 +196,7 @@ public class ConstructorPanel extends JPanel {
                 // Сітка починається нижче панелі масштабу, як на дизайні.
                 canvasScrollPane.setBounds(0, 105, w, Math.max(100, h - 105));
 
-                int bottomW = 505;
+                int bottomW = 540;
                 bottomActions.setBounds((w - bottomW) / 2, Math.max(10, h - 72), bottomW, 58);
             }
         });
@@ -413,6 +464,11 @@ public class ConstructorPanel extends JPanel {
                 horizontalSymmetry = newState;
             } else {
                 activeTool = tool;
+                pendingStamp = null;
+                pendingStampName = null;
+                pendingStampReusable = false;
+                selectedOrnamentBase = null;
+                selectedOrnamentName = null;
                 updateCanvasCursor();
             }
             refreshToolButtons();
@@ -444,7 +500,7 @@ public class ConstructorPanel extends JPanel {
     }
 
     private JButton sideButton(String iconName, String label, Runnable action) {
-        JButton b = new JButton(label, new ToolIcon(iconName)) {
+        JButton b = new JButton(label, loadToolIcon("tool_" + iconName + ".png")) {
             @Override
             protected void paintComponent(Graphics g) {
                 Object t = getClientProperty("tool");
@@ -489,16 +545,28 @@ public class ConstructorPanel extends JPanel {
 
             for (String name : possibleNames) {
                 java.net.URL url = getClass().getResource("/icons/" + name);
+
+                // У тебе іконки лежать прямо в resources, тому додатково шукаємо /tool_pencil.png
+                if (url == null) {
+                    url = getClass().getResource("/" + name);
+                }
+
                 if (url != null) {
                     img = ImageIO.read(url);
                     break;
                 }
             }
 
-            // Додатково для IntelliJ, якщо resources ще не підхопився як Resource Root
+            // Додатково для IntelliJ, якщо resources ще не підхопився як Resource Root.
             if (img == null) {
                 for (String name : possibleNames) {
                     File f = new File("src/main/resources/icons/" + name);
+
+                    // У тебе іконки лежать прямо тут: src/main/resources/
+                    if (!f.exists()) {
+                        f = new File("src/main/resources/" + name);
+                    }
+
                     if (f.exists()) {
                         img = ImageIO.read(f);
                         break;
@@ -506,82 +574,136 @@ public class ConstructorPanel extends JPanel {
                 }
             }
 
+            // Якщо назви файлів у тебе інші — шукаємо будь-яку картинку в папці icons
+            // за ключовими словами: pencil/olivets/олівець тощо.
+            if (img == null) {
+                File found = findIconFile(fileName);
+                if (found != null) {
+                    img = ImageIO.read(found);
+                }
+            }
+
             if (img == null) {
                 return fallbackToolIcon(fileName);
             }
 
-            img = cropWhiteMargins(img);
-            Image scaled = img.getScaledInstance(22, 22, Image.SCALE_SMOOTH);
-            return new ImageIcon(scaled);
+            img = removeWhiteBackgroundAndCrop(img);
+
+            BufferedImage fitted = new BufferedImage(22, 22, BufferedImage.TYPE_INT_ARGB);
+            Graphics2D g2 = fitted.createGraphics();
+            g2.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BICUBIC);
+            g2.setRenderingHint(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_QUALITY);
+
+            int size = Math.min(22, Math.max(1, Math.min(img.getWidth(), img.getHeight())));
+            double scale = Math.min(22.0 / img.getWidth(), 22.0 / img.getHeight());
+            int w = Math.max(1, (int) Math.round(img.getWidth() * scale));
+            int h = Math.max(1, (int) Math.round(img.getHeight() * scale));
+            int x = (22 - w) / 2;
+            int y = (22 - h) / 2;
+
+            g2.drawImage(img, x, y, w, h, null);
+            g2.dispose();
+
+            return new ImageIcon(fitted);
         } catch (Exception e) {
             return fallbackToolIcon(fileName);
         }
     }
 
+    private File findIconFile(String fileName) {
+        File[] dirs = {
+                new File("src/main/resources/icons"),
+                new File("src/main/resources"),
+                new File("resources/icons"),
+                new File("resources"),
+                new File("icons")
+        };
+
+        String[] keys = iconSearchKeys(fileName);
+
+        for (File iconsDir : dirs) {
+            if (!iconsDir.exists()) continue;
+
+            File[] files = iconsDir.listFiles((dir, name) -> {
+                String n = name.toLowerCase(Locale.ROOT);
+                return n.endsWith(".png") || n.endsWith(".jpg") || n.endsWith(".jpeg") || n.endsWith(".webp");
+            });
+
+            if (files == null) continue;
+
+            for (String key : keys) {
+                for (File f : files) {
+                    String n = f.getName().toLowerCase(Locale.ROOT);
+                    if (n.contains(key.toLowerCase(Locale.ROOT))) {
+                        return f;
+                    }
+                }
+            }
+        }
+
+        return null;
+    }
+
+    private String[] iconSearchKeys(String fileName) {
+        if (fileName.contains("cursor")) {
+            return new String[]{"cursor", "select", "choice", "arrow", "pointer", "vybir", "vibir", "вибір", "курсор", "стрілка"};
+        }
+        if (fileName.contains("pencil")) {
+            return new String[]{"pencil", "pen", "brush", "olivets", "oliv", "олівець", "карандаш", "пензлик"};
+        }
+        if (fileName.contains("eraser")) {
+            return new String[]{"eraser", "rubber", "lastik", "ластик", "гумка"};
+        }
+        if (fileName.contains("line")) {
+            return new String[]{"line", "linia", "лінія", "линия"};
+        }
+        if (fileName.contains("symmetry")) {
+            return new String[]{"symmetry", "mirror", "simetriya", "sym", "симетрія", "зеркало"};
+        }
+        if (fileName.contains("undo")) {
+            return new String[]{"undo", "back", "vidmin", "відмінити", "назад"};
+        }
+        if (fileName.contains("redo")) {
+            return new String[]{"redo", "return", "refresh", "povern", "повернути", "вперед"};
+        }
+        if (fileName.contains("zoom_in")) {
+            return new String[]{"zoom_in", "zoomin", "zoom-plus", "plus", "increase", "збільшити"};
+        }
+        if (fileName.contains("zoom_out")) {
+            return new String[]{"zoom_out", "zoomout", "zoom-minus", "minus", "decrease", "зменшити"};
+        }
+        return new String[]{fileName};
+    }
+
     private String[] possibleToolIconNames(String fileName) {
         switch (fileName) {
             case "tool_cursor.png":
-                return new String[]{"tool_cursor.png", "01_cursor.png"};
+                return new String[]{"tool_cursor.png", "01_cursor.png", "cursor.png", "select.png", "tool_select.png", "vybir.png", "vibir.png"};
             case "tool_pencil.png":
-                return new String[]{"tool_pencil.png", "02_pencil.png"};
+                return new String[]{"tool_pencil.png", "02_pencil.png", "pencil.png", "pen.png", "brush.png", "olivets.png"};
             case "tool_eraser.png":
-                return new String[]{"tool_eraser.png", "03_eraser.png"};
+                return new String[]{"tool_eraser.png", "03_eraser.png", "eraser.png", "rubber.png", "lastik.png"};
             case "tool_line.png":
-                return new String[]{"tool_line.png", "04_line.png"};
+                return new String[]{"tool_line.png", "04_line.png", "line.png", "linia.png"};
             case "tool_symmetry.png":
-                return new String[]{"tool_symmetry.png", "05_symmetry.png"};
+                return new String[]{"tool_symmetry.png", "05_symmetry.png", "symmetry.png", "mirror.png", "simetriya.png"};
             case "tool_undo.png":
-                return new String[]{"tool_undo.png", "06_undo.png"};
+                return new String[]{"tool_undo.png", "06_undo.png", "undo.png", "back.png", "vidminyty.png"};
             case "tool_redo.png":
-                return new String[]{"tool_redo.png", "07_redo_refresh.png"};
+                return new String[]{"tool_redo.png", "07_redo_refresh.png", "redo.png", "refresh.png", "povernuty.png"};
             case "tool_zoom_in.png":
-                return new String[]{"tool_zoom_in.png", "08_zoom_in.png"};
+                return new String[]{"tool_zoom_in.png", "08_zoom_in.png", "zoom_in.png", "zoomin.png", "zoom-plus.png", "zoom_plus.png"};
             case "tool_zoom_out.png":
-                return new String[]{"tool_zoom_out.png", "09_zoom_out.png"};
+                return new String[]{"tool_zoom_out.png", "09_zoom_out.png", "zoom_out.png", "zoomout.png", "zoom-minus.png", "zoom_minus.png"};
             default:
                 return new String[]{fileName};
         }
     }
 
     private ImageIcon fallbackToolIcon(String fileName) {
-        BufferedImage img = new BufferedImage(18, 18, BufferedImage.TYPE_INT_ARGB);
-        Graphics2D g2 = img.createGraphics();
-        g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-        g2.setColor(new Color(72, 68, 64));
-        g2.setStroke(new BasicStroke(1.8f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
-
-        if (fileName.contains("cursor")) {
-            Polygon p = new Polygon(new int[]{3, 3, 14}, new int[]{3, 15, 9}, 3);
-            g2.fillPolygon(p);
-        } else if (fileName.contains("pencil")) {
-            g2.drawLine(4, 14, 14, 4);
-            g2.drawLine(12, 3, 15, 6);
-        } else if (fileName.contains("eraser")) {
-            g2.drawRoundRect(4, 9, 10, 5, 2, 2);
-        } else if (fileName.contains("line")) {
-            g2.drawLine(4, 14, 14, 4);
-        } else if (fileName.contains("symmetry")) {
-            g2.drawLine(9, 3, 9, 15);
-            g2.drawLine(5, 6, 13, 6);
-            g2.drawLine(5, 12, 13, 12);
-        } else if (fileName.contains("undo")) {
-            g2.drawArc(4, 5, 10, 10, 50, 250);
-            g2.drawLine(5, 5, 3, 9);
-        } else if (fileName.contains("redo")) {
-            g2.drawArc(4, 5, 10, 10, -120, 250);
-            g2.drawLine(13, 5, 15, 9);
-        } else if (fileName.contains("zoom_in")) {
-            g2.drawOval(3, 3, 9, 9);
-            g2.drawLine(11, 11, 15, 15);
-            g2.drawLine(7, 5, 7, 10);
-            g2.drawLine(5, 7, 10, 7);
-        } else {
-            g2.drawOval(3, 3, 9, 9);
-            g2.drawLine(11, 11, 15, 15);
-            g2.drawLine(5, 7, 10, 7);
-        }
-
-        g2.dispose();
+        // Якщо файл іконки не знайдено, нічого не малюємо.
+        // Так на лівій панелі не з’являються старі намальовані іконки.
+        BufferedImage img = new BufferedImage(22, 22, BufferedImage.TYPE_INT_ARGB);
         return new ImageIcon(img);
     }
 
@@ -753,20 +875,21 @@ public class ConstructorPanel extends JPanel {
 
     private JPanel createBottomActionsPanel() {
         RoundedPanel p = new RoundedPanel(18, CARD);
-        p.setLayout(new FlowLayout(FlowLayout.CENTER, 14, 10));
-        p.add(bottomAction("⌫", "Очистити", this::clearCanvas));
-        p.add(bottomAction("⧉", "Дублювати", this::duplicatePattern));
-        p.add(bottomAction("≡", "Вирівняти по центру", this::centerPattern));
-        JButton del = bottomAction("⌦", "Видалити", this::clearCanvas);
-        del.setForeground(RED);
-        p.add(del);
+        p.setLayout(new FlowLayout(FlowLayout.CENTER, 18, 10));
+
+        p.add(bottomAction("bottom_clear.png", "Очистити", this::clearCanvas));
+        p.add(bottomAction("bottom_duplicate.png", "Дублювати", this::duplicatePattern));
+        p.add(bottomAction("bottom_align_center.png", "Вирівняти по центру", this::centerPattern));
+
         return p;
     }
 
-    private JButton bottomAction(String icon, String text, Runnable action) {
-        JButton b = new JButton(icon + "  " + text);
+    private JButton bottomAction(String iconName, String text, Runnable action) {
+        JButton b = new JButton(text, loadBottomActionIcon(iconName));
         b.setFont(new Font("Arial", Font.BOLD, 12));
         b.setForeground(new Color(90, 82, 74));
+        b.setHorizontalAlignment(SwingConstants.CENTER);
+        b.setIconTextGap(8);
         b.setContentAreaFilled(false);
         b.setFocusPainted(false);
         b.setBorderPainted(false);
@@ -775,72 +898,376 @@ public class ConstructorPanel extends JPanel {
         return b;
     }
 
-    private JPanel createRightSidebar() {
-        JPanel side = new JPanel();
-        side.setOpaque(false);
-        side.setPreferredSize(new Dimension(350, 0));
-        side.setLayout(new BoxLayout(side, BoxLayout.Y_AXIS));
-        side.add(sectionOrnaments());
-        side.add(Box.createVerticalStrut(14));
-        side.add(sectionLetters());
-        side.add(Box.createVerticalStrut(14));
-        side.add(sectionExport());
-        return side;
+    private ImageIcon loadBottomActionIcon(String fileName) {
+        try {
+            BufferedImage img = null;
+
+            String[] possibleNames = {
+                    fileName,
+                    "bottom_icons/" + fileName,
+                    "icons/" + fileName
+            };
+
+            for (String name : possibleNames) {
+                java.net.URL url = getClass().getResource("/" + name);
+                if (url != null) {
+                    img = ImageIO.read(url);
+                    break;
+                }
+            }
+
+            if (img == null) {
+                for (String name : possibleNames) {
+                    File f = new File("src/main/resources/" + name);
+                    if (f.exists()) {
+                        img = ImageIO.read(f);
+                        break;
+                    }
+                }
+            }
+
+            if (img == null) {
+                return new ImageIcon(new BufferedImage(18, 18, BufferedImage.TYPE_INT_ARGB));
+            }
+
+            img = removeWhiteBackgroundAndCrop(img);
+
+            BufferedImage fitted = new BufferedImage(18, 18, BufferedImage.TYPE_INT_ARGB);
+            Graphics2D g2 = fitted.createGraphics();
+            g2.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BICUBIC);
+            g2.setRenderingHint(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_QUALITY);
+
+            double scale = Math.min(18.0 / img.getWidth(), 18.0 / img.getHeight());
+            int w = Math.max(1, (int) Math.round(img.getWidth() * scale));
+            int h = Math.max(1, (int) Math.round(img.getHeight() * scale));
+            int x = (18 - w) / 2;
+            int y = (18 - h) / 2;
+
+            g2.drawImage(img, x, y, w, h, null);
+            g2.dispose();
+
+            return new ImageIcon(fitted);
+        } catch (Exception e) {
+            return new ImageIcon(new BufferedImage(18, 18, BufferedImage.TYPE_INT_ARGB));
+        }
     }
 
-    private JPanel sectionOrnaments() {
-        RoundedPanel p = cardSection("⌄  Орнаменти", "Показати всі");
-        JPanel row = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 6));
-        row.setOpaque(false);
-        List<boolean[][]> patterns = Arrays.asList(diamondPattern(), flowerPattern(), starPattern(), smallCrossPattern());
-        for (boolean[][] pattern : patterns) row.add(patternButton(pattern, () -> selectStamp(pattern, "Орнамент")));
-        row.add(softButton("›", () -> JOptionPane.showMessageDialog(this, "У повній версії тут буде прокрутка орнаментів.")));
-        p.add(row, BorderLayout.CENTER);
+    private JPanel createRightSidebar() {
+        JPanel outer = new JPanel(new BorderLayout());
+        outer.setOpaque(false);
+        outer.setPreferredSize(new Dimension(370, 0));
+
+        JPanel side = new JPanel();
+        side.setOpaque(false);
+        side.setLayout(new BoxLayout(side, BoxLayout.Y_AXIS));
+        side.setBorder(new EmptyBorder(0, 4, 0, 4));
+
+        side.add(sectionNameBuilder());
+        side.add(Box.createVerticalStrut(16));
+        side.add(sectionOrnaments());
+        side.add(Box.createVerticalStrut(16));
+        side.add(sectionLetters());
+        side.add(Box.createVerticalStrut(16));
+        side.add(sectionExport());
+        side.add(Box.createVerticalGlue());
+
+        JScrollPane scroll = new JScrollPane(side);
+        scroll.setBorder(null);
+        scroll.setOpaque(false);
+        scroll.getViewport().setOpaque(false);
+        scroll.setHorizontalScrollBarPolicy(ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER);
+        scroll.setVerticalScrollBarPolicy(ScrollPaneConstants.VERTICAL_SCROLLBAR_AS_NEEDED);
+        scroll.getVerticalScrollBar().setUnitIncrement(18);
+        outer.add(scroll, BorderLayout.CENTER);
+        return outer;
+    }
+
+    private JPanel sectionNameBuilder() {
+        RoundedPanel p = cardSection("Додати ім’я", "Схема одразу відкриється на полотні", null);
+
+        JPanel box = new JPanel();
+        box.setOpaque(false);
+        box.setLayout(new BoxLayout(box, BoxLayout.Y_AXIS));
+        box.setAlignmentX(Component.LEFT_ALIGNMENT);
+
+        JPanel inputWrap = new RoundedPanel(14, new Color(255, 252, 248));
+        inputWrap.setLayout(new BorderLayout(10, 0));
+        inputWrap.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createLineBorder(new Color(238, 229, 218), 1),
+                new EmptyBorder(8, 12, 8, 12)
+        ));
+        inputWrap.setPreferredSize(new Dimension(320, 44));
+        inputWrap.setMaximumSize(new Dimension(Integer.MAX_VALUE, 44));
+        inputWrap.setAlignmentX(Component.LEFT_ALIGNMENT);
+
+        JLabel inputIcon = new JLabel("✦");
+        inputIcon.setFont(new Font("Serif", Font.BOLD, 18));
+        inputIcon.setForeground(RED);
+
+        JTextField nameField = new JTextField("Анна");
+        nameField.setFont(new Font("Arial", Font.BOLD, 15));
+        nameField.setForeground(TEXT);
+        nameField.setOpaque(false);
+        nameField.setBorder(null);
+        nameField.addActionListener(e -> addNameFromField(nameField));
+
+        JButton okButton = new JButton("OK");
+        okButton.setFont(new Font("Arial", Font.BOLD, 11));
+        okButton.setForeground(Color.WHITE);
+        okButton.setBackground(RED);
+        okButton.setFocusPainted(false);
+        okButton.setBorder(BorderFactory.createEmptyBorder(5, 10, 5, 10));
+        okButton.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+        okButton.addActionListener(e -> addNameFromField(nameField));
+
+        inputWrap.add(inputIcon, BorderLayout.WEST);
+        inputWrap.add(nameField, BorderLayout.CENTER);
+        inputWrap.add(okButton, BorderLayout.EAST);
+
+        JLabel readyLabel = new JLabel("Готові імена");
+        readyLabel.setFont(new Font("Arial", Font.BOLD, 12));
+        readyLabel.setForeground(new Color(120, 108, 99));
+        readyLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
+
+        JPanel quick = new JPanel(new GridLayout(2, 3, 8, 8));
+        quick.setOpaque(false);
+        quick.setPreferredSize(new Dimension(320, 76));
+        quick.setMaximumSize(new Dimension(Integer.MAX_VALUE, 76));
+        quick.setAlignmentX(Component.LEFT_ALIGNMENT);
+
+        String[] examples = {"Анна", "Марія", "Оксана", "Софія", "Андрій", "Артем"};
+        for (String name : examples) {
+            quick.add(nameChip(name, () -> {
+                nameField.setText(name);
+                addNameFromField(nameField);
+            }));
+        }
+
+        box.add(inputWrap);
+        box.add(Box.createVerticalStrut(10));
+        box.add(readyLabel);
+        box.add(Box.createVerticalStrut(7));
+        box.add(quick);
+
+        p.add(box, BorderLayout.CENTER);
+        p.setMaximumSize(new Dimension(360, 255));
+        p.setPreferredSize(new Dimension(360, 255));
         return p;
     }
 
+    private void addNameFromField(JTextField field) {
+        String name = field.getText().trim();
+        if (name.isEmpty()) {
+            JOptionPane.showMessageDialog(this, "Введіть ім’я.", "Додавання імені", JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+
+        NamePatternRepository.NamePattern exact = NamePatternRepository.findByName(name);
+        if (exact != null) {
+            loadNamePattern(exact);
+            return;
+        }
+
+        int[][] generated = buildNameFromLetters(name);
+        loadNamePattern(new NamePatternRepository.NamePattern(name, generated));
+        JOptionPane.showMessageDialog(
+                this,
+                "Точної схеми для імені ‘" + name + "’ немає у базі, тому я створила ім’я з літер.\nЙого можна редагувати на сітці.",
+                "Ім’я додано",
+                JOptionPane.INFORMATION_MESSAGE
+        );
+    }
+
+    private JPanel sectionOrnaments() {
+        RoundedPanel p = cardSection("Орнаменти", "1) Обери орнамент  2) Обери розмір  3) Став на сітку", null);
+
+        JPanel wrap = new JPanel();
+        wrap.setOpaque(false);
+        wrap.setLayout(new BoxLayout(wrap, BoxLayout.Y_AXIS));
+
+        JPanel row = new JPanel(new GridLayout(2, 4, 10, 10));
+        row.setOpaque(false);
+        row.setMaximumSize(new Dimension(Integer.MAX_VALUE, 138));
+
+        List<boolean[][]> patterns = Arrays.asList(
+                diamondPattern(),
+                flowerPattern(),
+                starPattern(),
+                smallCrossPattern(),
+                wavePattern(),
+                leafPattern(),
+                sunPattern(),
+                borderPattern()
+        );
+
+        String[] labels = {"Ромб", "Квітка", "Зірка", "Хрест", "Хвиля", "Листок", "Сонце", "Бордюр"};
+
+        JPanel sizeRow = new JPanel(new BorderLayout(10, 0));
+        sizeRow.setOpaque(false);
+        sizeRow.setMaximumSize(new Dimension(Integer.MAX_VALUE, 34));
+
+        JLabel sizeLabel = new JLabel("Розмір");
+        sizeLabel.setFont(new Font("Arial", Font.BOLD, 12));
+        sizeLabel.setForeground(new Color(120, 108, 99));
+
+        JPanel sizeButtons = new JPanel(new GridLayout(1, 4, 6, 0));
+        sizeButtons.setOpaque(false);
+        sizeButtons.setPreferredSize(new Dimension(210, 30));
+
+        JButton smallSize = sizeChoiceButton("S", 1);
+        JButton mediumSize = sizeChoiceButton("M", 2);
+        JButton largeSize = sizeChoiceButton("L", 3);
+        JButton extraLargeSize = sizeChoiceButton("XL", 4);
+
+        sizeButtons.add(smallSize);
+        sizeButtons.add(mediumSize);
+        sizeButtons.add(largeSize);
+        sizeButtons.add(extraLargeSize);
+        refreshSizeButtons(sizeButtons, selectedOrnamentScale);
+
+        sizeRow.add(sizeLabel, BorderLayout.WEST);
+        sizeRow.add(sizeButtons, BorderLayout.EAST);
+
+        for (int i = 0; i < patterns.size(); i++) {
+            boolean[][] pattern = patterns.get(i);
+            String label = labels[i];
+
+            row.add(patternButton(pattern, label, () -> selectOrnament(pattern, label)));
+        }
+
+        wrap.add(row);
+        wrap.add(Box.createVerticalStrut(10));
+        wrap.add(sizeRow);
+
+        p.add(wrap, BorderLayout.CENTER);
+        return p;
+    }
+
+
+
+    private JButton sizeChoiceButton(String label, int scale) {
+        JButton b = new JButton(label);
+        b.setFont(new Font("Arial", Font.BOLD, 11));
+        b.setFocusPainted(false);
+        b.setContentAreaFilled(true);
+        b.setOpaque(true);
+        b.setBorderPainted(true);
+        b.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+        b.addActionListener(e -> {
+            selectedOrnamentScale = scale;
+            if (selectedOrnamentBase != null) {
+                pendingStamp = scaleOrnament(selectedOrnamentBase, selectedOrnamentScale);
+                pendingStampName = selectedOrnamentName;
+                pendingStampReusable = true;
+                activeTool = Tool.PENCIL;
+                refreshToolButtons();
+                updateCanvasCursor();
+                canvas.repaint();
+            }
+            refreshSizeButtons((JPanel) b.getParent(), selectedOrnamentScale);
+        });
+        b.putClientProperty("scale", scale);
+        return b;
+    }
+
+    private void refreshSizeButtons(JPanel panel, int selectedScale) {
+        for (Component component : panel.getComponents()) {
+            if (!(component instanceof JButton)) continue;
+
+            JButton button = (JButton) component;
+            Object value = button.getClientProperty("scale");
+            boolean selected = value instanceof Integer && ((Integer) value) == selectedScale;
+
+            button.setForeground(selected ? RED : new Color(112, 96, 86));
+            button.setBackground(selected ? new Color(255, 238, 238) : new Color(255, 250, 246));
+            button.setBorder(BorderFactory.createCompoundBorder(
+                    BorderFactory.createLineBorder(selected ? RED : new Color(238, 221, 215), selected ? 2 : 1),
+                    new EmptyBorder(selected ? 4 : 5, 8, selected ? 4 : 5, 8)
+            ));
+        }
+    }
+
+    private boolean[][] scaleOrnament(boolean[][] source, int scale) {
+        if (scale <= 1) return source;
+
+        int rows = source.length * scale;
+        int cols = source[0].length * scale;
+        boolean[][] result = new boolean[rows][cols];
+
+        for (int r = 0; r < source.length; r++) {
+            for (int c = 0; c < source[r].length; c++) {
+                if (source[r][c]) {
+                    for (int rr = 0; rr < scale; rr++) {
+                        for (int cc = 0; cc < scale; cc++) {
+                            result[r * scale + rr][c * scale + cc] = true;
+                        }
+                    }
+                }
+            }
+        }
+
+        return result;
+    }
+
     private JPanel sectionLetters() {
-        RoundedPanel p = cardSection("⌄  Літери та цифри", "Показати всі");
-        JPanel grid = new JPanel(new GridLayout(2, 5, 10, 10));
+        RoundedPanel p = cardSection("Літери та цифри", "Натисни символ і постав його на полотні", null);
+
+        JPanel grid = new JPanel(new GridLayout(2, 5, 9, 9));
         grid.setOpaque(false);
         String[] chars = {"А", "Б", "В", "Г", "Д", "1", "2", "3", "4", "5"};
-        for (String ch : chars) grid.add(letterButton(ch));
+        for (String ch : chars) {
+            grid.add(letterButton(ch));
+        }
+
         p.add(grid, BorderLayout.CENTER);
         return p;
     }
 
     private JPanel sectionExport() {
-        RoundedPanel p = cardSection("⌄  Експорт", null);
+        RoundedPanel p = cardSection("Експорт", "Збереження готової схеми", null);
+
         JPanel list = new JPanel();
         list.setOpaque(false);
         list.setLayout(new BoxLayout(list, BoxLayout.Y_AXIS));
 
-        list.add(exportButton("export_save.png", "Зберегти проект", "Файл .vysh",
-                this::saveProjectToCollection));
-        list.add(Box.createVerticalStrut(8));
-
-        list.add(exportButton("export_file.png", "Експортувати схему", "PNG",
-                this::exportPNG));
-        list.add(Box.createVerticalStrut(8));
-
-        list.add(exportButton("export_share.png", "Поділитися проектом", "Посилання для перегляду",
-                () -> JOptionPane.showMessageDialog(this, "Посилання буде доступне після збереження проєкту.")));
+        list.add(exportButton("export_save.png", "Зберегти проект", "збережеться у вкладці Моя колекція", this::saveProjectToCollection));
+        list.add(Box.createVerticalStrut(9));
+        list.add(exportButton("export_file.png", "Експортувати схему", "PNG файл для перегляду або друку", this::exportPNG));
 
         p.add(list, BorderLayout.CENTER);
         return p;
     }
 
-    private RoundedPanel cardSection(String title, String action) {
-        RoundedPanel p = new RoundedPanel(18, CARD);
-        p.setLayout(new BorderLayout(0, 12));
-        p.setBorder(new EmptyBorder(18, 18, 18, 18));
-        p.setMaximumSize(new Dimension(350, 1000));
-        JPanel head = new JPanel(new BorderLayout());
+    private RoundedPanel cardSection(String title, String subtitle, String action) {
+        RoundedPanel p = new RoundedPanel(24, CARD);
+        p.setLayout(new BorderLayout(0, 14));
+        p.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createLineBorder(new Color(236, 229, 221), 1),
+                new EmptyBorder(20, 20, 20, 20)
+        ));
+        p.setMaximumSize(new Dimension(360, 1000));
+        p.setAlignmentX(Component.LEFT_ALIGNMENT);
+
+        JPanel head = new JPanel(new BorderLayout(12, 0));
         head.setOpaque(false);
-        JLabel h = new JLabel(title);
-        h.setFont(new Font("Arial", Font.BOLD, 16));
-        h.setForeground(new Color(70, 62, 55));
-        head.add(h, BorderLayout.WEST);
+
+        JPanel titleBox = new JPanel();
+        titleBox.setOpaque(false);
+        titleBox.setLayout(new BoxLayout(titleBox, BoxLayout.Y_AXIS));
+
+        JLabel h = new JLabel("⌄  " + title);
+        h.setFont(new Font("Arial", Font.BOLD, 18));
+        h.setForeground(new Color(66, 58, 52));
+
+        JLabel s = new JLabel(subtitle == null ? " " : subtitle);
+        s.setFont(new Font("Arial", Font.PLAIN, 11));
+        s.setForeground(new Color(155, 145, 136));
+
+        titleBox.add(h);
+        titleBox.add(Box.createVerticalStrut(3));
+        titleBox.add(s);
+        head.add(titleBox, BorderLayout.WEST);
+
         if (action != null) {
             JButton a = new JButton(action);
             a.setFont(new Font("Arial", Font.BOLD, 12));
@@ -852,24 +1279,58 @@ public class ConstructorPanel extends JPanel {
             a.addActionListener(e -> JOptionPane.showMessageDialog(this, action));
             head.add(a, BorderLayout.EAST);
         }
+
         p.add(head, BorderLayout.NORTH);
         return p;
     }
 
-    private JButton patternButton(boolean[][] pattern, Runnable action) {
+    private JButton primarySidebarButton(String text, Runnable action) {
+        JButton b = new JButton(text + "  →");
+        b.setFont(new Font("Arial", Font.BOLD, 13));
+        b.setForeground(Color.WHITE);
+        b.setBackground(RED);
+        b.setFocusPainted(false);
+        b.setBorder(BorderFactory.createEmptyBorder(11, 14, 11, 14));
+        b.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+        b.setMaximumSize(new Dimension(Integer.MAX_VALUE, 43));
+        b.addActionListener(e -> action.run());
+        return b;
+    }
+
+    private JButton nameChip(String text, Runnable action) {
+        JButton b = new JButton(text);
+        b.setFont(new Font("Arial", Font.BOLD, 11));
+        b.setForeground(new Color(82, 72, 64));
+        b.setBackground(new Color(255, 248, 244));
+        b.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createLineBorder(new Color(239, 221, 216), 1),
+                new EmptyBorder(4, 8, 4, 8)
+        ));
+        b.setFocusPainted(false);
+        b.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+        b.addActionListener(e -> action.run());
+        return b;
+    }
+
+    private JButton patternButton(boolean[][] pattern, String label, Runnable action) {
         JButton b = new JButton() {
             @Override protected void paintComponent(Graphics g) {
                 Graphics2D g2 = (Graphics2D) g.create();
                 g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-                g2.setColor(CARD_SOFT);
-                g2.fillRoundRect(0, 0, getWidth() - 1, getHeight() - 1, 10, 10);
-                g2.setColor(LINE);
-                g2.drawRoundRect(0, 0, getWidth() - 1, getHeight() - 1, 10, 10);
-                drawMiniPattern(g2, pattern, 8, 8, getWidth() - 16, getHeight() - 16, RED);
+                g2.setColor(new Color(255, 252, 248));
+                g2.fillRoundRect(0, 0, getWidth() - 1, getHeight() - 1, 16, 16);
+                g2.setColor(new Color(235, 226, 216));
+                g2.drawRoundRect(0, 0, getWidth() - 1, getHeight() - 1, 16, 16);
+                drawMiniPattern(g2, pattern, 8, 6, getWidth() - 16, getHeight() - 24, RED);
+                g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+                g2.setFont(new Font("Arial", Font.BOLD, 9));
+                g2.setColor(new Color(116, 105, 95));
+                FontMetrics fm = g2.getFontMetrics();
+                g2.drawString(label, (getWidth() - fm.stringWidth(label)) / 2, getHeight() - 8);
                 g2.dispose();
             }
         };
-        b.setPreferredSize(new Dimension(62, 54));
+        b.setPreferredSize(new Dimension(72, 62));
         b.setContentAreaFilled(false);
         b.setFocusPainted(false);
         b.setBorderPainted(false);
@@ -884,15 +1345,15 @@ public class ConstructorPanel extends JPanel {
                 Graphics2D g2 = (Graphics2D) g.create();
                 g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
                 g2.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
-                g2.setColor(CARD_SOFT);
-                g2.fillRoundRect(0, 0, getWidth() - 1, getHeight() - 1, 10, 10);
-                g2.setColor(LINE);
-                g2.drawRoundRect(0, 0, getWidth() - 1, getHeight() - 1, 10, 10);
+                g2.setColor(new Color(255, 252, 248));
+                g2.fillRoundRect(0, 0, getWidth() - 1, getHeight() - 1, 14, 14);
+                g2.setColor(new Color(235, 226, 216));
+                g2.drawRoundRect(0, 0, getWidth() - 1, getHeight() - 1, 14, 14);
                 drawStitchedChar(g2, ch, getWidth(), getHeight());
                 g2.dispose();
             }
         };
-        b.setPreferredSize(new Dimension(58, 48));
+        b.setPreferredSize(new Dimension(58, 50));
         b.setContentAreaFilled(false);
         b.setFocusPainted(false);
         b.setBorderPainted(false);
@@ -935,15 +1396,15 @@ public class ConstructorPanel extends JPanel {
 
         b.setFont(new Font("Arial", Font.PLAIN, 12));
         b.setHorizontalAlignment(SwingConstants.LEFT);
-        b.setIconTextGap(12);
+        b.setIconTextGap(13);
         b.setForeground(new Color(86, 78, 70));
-        b.setBackground(CARD_SOFT);
+        b.setBackground(new Color(255, 252, 248));
         b.setBorder(BorderFactory.createCompoundBorder(
-                BorderFactory.createLineBorder(LINE),
-                new EmptyBorder(9, 14, 9, 14)
+                BorderFactory.createLineBorder(new Color(235, 226, 216), 1),
+                new EmptyBorder(11, 14, 11, 14)
         ));
-        b.setMaximumSize(new Dimension(312, 58));
-        b.setPreferredSize(new Dimension(312, 58));
+        b.setMaximumSize(new Dimension(Integer.MAX_VALUE, 62));
+        b.setPreferredSize(new Dimension(318, 62));
         b.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
         b.setFocusPainted(false);
         b.addActionListener(e -> action.run());
@@ -981,22 +1442,36 @@ public class ConstructorPanel extends JPanel {
     }
 
     private BufferedImage cropWhiteMargins(BufferedImage img) {
-        int minX = img.getWidth();
-        int minY = img.getHeight();
+        return removeWhiteBackgroundAndCrop(img);
+    }
+
+    private BufferedImage removeWhiteBackgroundAndCrop(BufferedImage source) {
+        BufferedImage transparent = new BufferedImage(
+                source.getWidth(),
+                source.getHeight(),
+                BufferedImage.TYPE_INT_ARGB
+        );
+
+        int minX = source.getWidth();
+        int minY = source.getHeight();
         int maxX = -1;
         int maxY = -1;
 
-        for (int y = 0; y < img.getHeight(); y++) {
-            for (int x = 0; x < img.getWidth(); x++) {
-                int argb = img.getRGB(x, y);
+        for (int y = 0; y < source.getHeight(); y++) {
+            for (int x = 0; x < source.getWidth(); x++) {
+                int argb = source.getRGB(x, y);
                 int a = (argb >>> 24) & 0xff;
                 int r = (argb >>> 16) & 0xff;
                 int g = (argb >>> 8) & 0xff;
                 int b = argb & 0xff;
 
-                // Відсікаємо білий фон, залишаємо темну іконку
-                boolean notWhite = a > 20 && !(r > 235 && g > 235 && b > 235);
-                if (notWhite) {
+                // Прибираємо білий/майже білий фон із фото іконки.
+                boolean whiteBackground = a < 20 || (r > 235 && g > 235 && b > 235);
+
+                if (whiteBackground) {
+                    transparent.setRGB(x, y, 0x00000000);
+                } else {
+                    transparent.setRGB(x, y, argb);
                     minX = Math.min(minX, x);
                     minY = Math.min(minY, y);
                     maxX = Math.max(maxX, x);
@@ -1006,10 +1481,23 @@ public class ConstructorPanel extends JPanel {
         }
 
         if (maxX < minX || maxY < minY) {
-            return img;
+            return transparent;
         }
 
-        return img.getSubimage(minX, minY, maxX - minX + 1, maxY - minY + 1);
+        int padding = 1;
+        minX = Math.max(0, minX - padding);
+        minY = Math.max(0, minY - padding);
+        maxX = Math.min(transparent.getWidth() - 1, maxX + padding);
+        maxY = Math.min(transparent.getHeight() - 1, maxY + padding);
+
+        BufferedImage cropped = transparent.getSubimage(minX, minY, maxX - minX + 1, maxY - minY + 1);
+
+        BufferedImage copy = new BufferedImage(cropped.getWidth(), cropped.getHeight(), BufferedImage.TYPE_INT_ARGB);
+        Graphics2D g2 = copy.createGraphics();
+        g2.drawImage(cropped, 0, 0, null);
+        g2.dispose();
+
+        return copy;
     }
 
     private ImageIcon fallbackExportIcon(String fileName) {
@@ -1191,6 +1679,20 @@ public class ConstructorPanel extends JPanel {
         pendingStamp = pattern;
         pendingStampColor = selectedColor;
         pendingStampName = name;
+        pendingStampReusable = false;
+        activeTool = Tool.PENCIL;
+        refreshToolButtons();
+        updateCanvasCursor();
+        canvas.repaint();
+    }
+
+    private void selectOrnament(boolean[][] pattern, String name) {
+        selectedOrnamentBase = pattern;
+        selectedOrnamentName = name;
+        pendingStamp = scaleOrnament(pattern, selectedOrnamentScale);
+        pendingStampColor = selectedColor;
+        pendingStampName = name;
+        pendingStampReusable = true;
         activeTool = Tool.PENCIL;
         refreshToolButtons();
         updateCanvasCursor();
@@ -1214,8 +1716,11 @@ public class ConstructorPanel extends JPanel {
             }
         }
 
-        pendingStamp = null;
-        pendingStampName = null;
+        if (!pendingStampReusable) {
+            pendingStamp = null;
+            pendingStampName = null;
+        }
+
         repaintAll();
     }
 
@@ -1236,6 +1741,150 @@ public class ConstructorPanel extends JPanel {
             }
         }
         return pattern;
+    }
+
+    private int[][] buildNameFromLetters(String name) {
+        String cleaned = name.trim().toUpperCase(Locale.ROOT).replaceAll("\\s+", "");
+        if (cleaned.isEmpty()) cleaned = "ІМЯ";
+
+        return buildLargeNameForCanvas(cleaned);
+    }
+
+    private int[][] buildLargeNameForCanvas(String text) {
+        int maxWidth = Math.max(24, COLS - 10);
+        int maxTextHeight = Math.max(10, Math.min(16, ROWS - 28));
+
+        BufferedImage measureImg = new BufferedImage(1, 1, BufferedImage.TYPE_INT_ARGB);
+        Graphics2D measure = measureImg.createGraphics();
+        measure.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_OFF);
+
+        Font bestFont = new Font("Dialog", Font.PLAIN, 10);
+        FontMetrics bestFm = measure.getFontMetrics(bestFont);
+
+        for (int size = maxTextHeight; size >= 8; size--) {
+            Font font = new Font("Dialog", Font.BOLD, size);
+            FontMetrics fm = measure.getFontMetrics(font);
+            int width = fm.stringWidth(text);
+            int height = fm.getAscent();
+
+            if (width <= maxWidth && height <= maxTextHeight) {
+                bestFont = font;
+                bestFm = fm;
+                break;
+            }
+        }
+
+        int imageW = Math.min(maxWidth, Math.max(1, bestFm.stringWidth(text) + 2));
+        int imageH = Math.max(10, bestFm.getAscent() + bestFm.getDescent() + 2);
+
+        BufferedImage img = new BufferedImage(imageW, imageH, BufferedImage.TYPE_INT_ARGB);
+        Graphics2D g = img.createGraphics();
+        g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_OFF);
+        g.setColor(Color.BLACK);
+        g.setFont(bestFont);
+
+        FontMetrics fm = g.getFontMetrics();
+        int x = Math.max(0, (imageW - fm.stringWidth(text)) / 2);
+        int y = Math.max(fm.getAscent(), 1 + fm.getAscent());
+        g.drawString(text, x, y);
+        g.dispose();
+        measure.dispose();
+
+        int[][] letters = imageToPattern(img);
+        return addNameOrnamentFrame(letters);
+    }
+
+    private int[][] imageToPattern(BufferedImage img) {
+        int[][] pattern = new int[img.getHeight()][img.getWidth()];
+
+        for (int y = 0; y < img.getHeight(); y++) {
+            for (int x = 0; x < img.getWidth(); x++) {
+                int alpha = (img.getRGB(x, y) >>> 24);
+                if (alpha > 0) {
+                    pattern[y][x] = NamePatternRepository.RED_CELL;
+                }
+            }
+        }
+
+        return trimEmptyBorders(pattern);
+    }
+
+    private int[][] addNameOrnamentFrame(int[][] letters) {
+        int maxWidth = Math.max(24, COLS - 6);
+        int maxHeight = Math.max(20, ROWS - 14);
+
+        int paddingX = 4;
+        int paddingY = 6;
+
+        int rows = Math.min(maxHeight, letters.length + paddingY * 2);
+        int cols = Math.min(maxWidth, letters[0].length + paddingX * 2);
+        int[][] result = new int[rows][cols];
+
+        int startR = Math.max(0, (rows - letters.length) / 2);
+        int startC = Math.max(0, (cols - letters[0].length) / 2);
+
+        for (int r = 0; r < letters.length; r++) {
+            for (int c = 0; c < letters[r].length; c++) {
+                int rr = startR + r;
+                int cc = startC + c;
+                if (rr >= 0 && rr < rows && cc >= 0 && cc < cols && letters[r][c] != NamePatternRepository.EMPTY_CELL) {
+                    result[rr][cc] = NamePatternRepository.RED_CELL;
+                }
+            }
+        }
+
+        int top = 1;
+        int bottom = rows - 2;
+
+        for (int c = 3; c < cols - 3; c += 5) {
+            result[top][c] = NamePatternRepository.BLACK_CELL;
+            result[bottom][c] = NamePatternRepository.BLACK_CELL;
+        }
+
+        for (int c = 5; c < cols - 5; c += 8) {
+            result[top + 1][c] = NamePatternRepository.RED_CELL;
+            result[bottom - 1][c] = NamePatternRepository.RED_CELL;
+        }
+
+        return result;
+    }
+
+    private int[][] trimEmptyBorders(int[][] pattern) {
+        int top = 0;
+        int bottom = pattern.length - 1;
+        int left = 0;
+        int right = pattern[0].length - 1;
+
+        while (top <= bottom && isEmptyRow(pattern, top)) top++;
+        while (bottom >= top && isEmptyRow(pattern, bottom)) bottom--;
+        while (left <= right && isEmptyCol(pattern, left)) left++;
+        while (right >= left && isEmptyCol(pattern, right)) right--;
+
+        if (top > bottom || left > right) {
+            return new int[][]{{NamePatternRepository.EMPTY_CELL}};
+        }
+
+        int[][] trimmed = new int[bottom - top + 1][right - left + 1];
+        for (int r = top; r <= bottom; r++) {
+            for (int c = left; c <= right; c++) {
+                trimmed[r - top][c - left] = pattern[r][c];
+            }
+        }
+        return trimmed;
+    }
+
+    private boolean isEmptyRow(int[][] pattern, int row) {
+        for (int value : pattern[row]) {
+            if (value != NamePatternRepository.EMPTY_CELL) return false;
+        }
+        return true;
+    }
+
+    private boolean isEmptyCol(int[][] pattern, int col) {
+        for (int[] rows : pattern) {
+            if (rows[col] != NamePatternRepository.EMPTY_CELL) return false;
+        }
+        return true;
     }
 
     private void insertOrnamentAtCenter(boolean[][] pattern, Color color) {
@@ -1432,6 +2081,62 @@ public class ConstructorPanel extends JPanel {
         return parse(rows);
     }
 
+    private boolean[][] wavePattern() {
+        String[] rows = {
+                "1000001000001",
+                "1100011100011",
+                "0110110110110",
+                "0011100011100",
+                "0110110110110",
+                "1100011100011",
+                "1000001000001"
+        };
+        return parse(rows);
+    }
+
+    private boolean[][] leafPattern() {
+        String[] rows = {
+                "000010000",
+                "000111000",
+                "001101100",
+                "011000110",
+                "110111011",
+                "011000110",
+                "001101100",
+                "000111000",
+                "000010000"
+        };
+        return parse(rows);
+    }
+
+    private boolean[][] sunPattern() {
+        String[] rows = {
+                "100010001",
+                "010010010",
+                "001111100",
+                "001101100",
+                "111111111",
+                "001101100",
+                "001111100",
+                "010010010",
+                "100010001"
+        };
+        return parse(rows);
+    }
+
+    private boolean[][] borderPattern() {
+        String[] rows = {
+                "1010101010101",
+                "0101010101010",
+                "0010001000100",
+                "0111011101110",
+                "0010001000100",
+                "0101010101010",
+                "1010101010101"
+        };
+        return parse(rows);
+    }
+
     private boolean[][] parse(String[] rows) {
         boolean[][] a = new boolean[rows.length][rows[0].length()];
         for (int r = 0; r < rows.length; r++) for (int c = 0; c < rows[r].length(); c++) a[r][c] = rows[r].charAt(c) == '1';
@@ -1474,6 +2179,9 @@ public class ConstructorPanel extends JPanel {
                         if (SwingUtilities.isRightMouseButton(e) || e.isControlDown()) {
                             pendingStamp = null;
                             pendingStampName = null;
+                            pendingStampReusable = false;
+                            selectedOrnamentBase = null;
+                            selectedOrnamentName = null;
                             repaintAll();
                             return;
                         }

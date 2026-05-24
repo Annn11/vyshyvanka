@@ -29,7 +29,7 @@ public class HistorySidebar extends JPanel {
         // Генерація елементів бокового меню
         add(createMenuButton("Головна", "MAIN_PAGE", activeKey.equals("MAIN_PAGE")));
         add(createMenuButton("Конструктор", "CONSTRUCTOR", activeKey.equals("CONSTRUCTOR")));
-        add(createMenuButton("Орнаменти", "ORNAMENTS", activeKey.equals("ORNAMENTS")));
+        add(createMenuButton("Імена", "IDEAS", activeKey.equals("IDEAS")));
         add(createMenuButton("Історія вишиванки", "HISTORY_PAGE", activeKey.equals("HISTORY_PAGE")));
         add(createMenuButton("Збережені проєкти", "SAVED", activeKey.equals("SAVED")));
     }
@@ -61,7 +61,7 @@ public class HistorySidebar extends JPanel {
 
         // Перемикач сторінок в реальному часі
         button.addActionListener(e -> {
-            if (pageKey.equals("MAIN_PAGE") || pageKey.equals("HISTORY_PAGE") || pageKey.equals("CONSTRUCTOR") || pageKey.equals("ORNAMENTS") || pageKey.equals("SAVED")) {
+            if (pageKey.equals("MAIN_PAGE") || pageKey.equals("HISTORY_PAGE") || pageKey.equals("CONSTRUCTOR") || pageKey.equals("IDEAS") || pageKey.equals("SAVED")) {
                 cardLayout.show(contentTargetPanel, pageKey);
 
                 // Динамічно оновлюємо стан бічної панелі, щоб переключити активний фокус підсвічування
