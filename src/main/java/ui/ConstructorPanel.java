@@ -4,6 +4,7 @@ import model.ProjectPreview;
 import javax.imageio.ImageIO;
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
+import javax.swing.filechooser.FileNameExtensionFilter;
 import java.awt.*;
 import java.awt.event.*;
 import java.awt.image.BufferedImage;
@@ -80,6 +81,38 @@ public class ConstructorPanel extends JPanel {
         });
 
         saveState();
+        loadDefaultNamePattern();
+    }
+
+
+    public void loadSavedProject(ProjectPreview project) {
+        if (project == null) return;
+
+        saveState();
+
+        for (int r = 0; r < ROWS; r++) {
+            Arrays.fill(cells[r], null);
+        }
+
+        Color[][] savedPattern = project.getFullPattern();
+        int rows = Math.min(ROWS, savedPattern.length);
+        for (int r = 0; r < rows; r++) {
+            int cols = Math.min(COLS, savedPattern[r].length);
+            for (int c = 0; c < cols; c++) {
+                cells[r][c] = savedPattern[r][c];
+            }
+        }
+
+        pendingStamp = null;
+        pendingStampName = null;
+        pendingStampReusable = false;
+        selectedOrnamentBase = null;
+        selectedOrnamentName = null;
+        lineStart = null;
+        activeTool = Tool.PENCIL;
+        refreshToolButtons();
+        refreshCanvasSize();
+        repaintAll();
     }
 
     public void loadNamePattern(NamePatternRepository.NamePattern namePattern) {
@@ -1055,6 +1088,19 @@ public class ConstructorPanel extends JPanel {
         return p;
     }
 
+    private void loadDefaultNamePattern() {
+        SwingUtilities.invokeLater(() -> {
+            if (!isCanvasEmpty()) return;
+
+            NamePatternRepository.NamePattern anna = NamePatternRepository.findByName("Анна");
+            if (anna != null) {
+                loadNamePattern(anna);
+            } else {
+                loadNamePattern(new NamePatternRepository.NamePattern("Анна", buildNameFromLetters("Анна")));
+            }
+        });
+    }
+
     private void addNameFromField(JTextField field) {
         String name = field.getText().trim();
         if (name.isEmpty()) {
@@ -1079,7 +1125,7 @@ public class ConstructorPanel extends JPanel {
     }
 
     private JPanel sectionOrnaments() {
-        RoundedPanel p = cardSection("Орнаменти", "1) Обери орнамент  2) Обери розмір  3) Став на сітку", null);
+        RoundedPanel p = cardSection("Орнаменти", "обери орнамент - обери розмір - став на сітку", null);
 
         JPanel wrap = new JPanel();
         wrap.setOpaque(false);
@@ -1233,6 +1279,8 @@ public class ConstructorPanel extends JPanel {
         list.add(exportButton("export_save.png", "Зберегти проект", "збережеться у вкладці Моя колекція", this::saveProjectToCollection));
         list.add(Box.createVerticalStrut(9));
         list.add(exportButton("export_file.png", "Експортувати схему", "PNG файл для перегляду або друку", this::exportPNG));
+        list.add(Box.createVerticalStrut(9));
+        list.add(exportButton("export_file.png", "Відкрити PNG", "імпорт PNG назад на сітку", this::importPNG));
 
         p.add(list, BorderLayout.CENTER);
         return p;
@@ -1645,13 +1693,133 @@ public class ConstructorPanel extends JPanel {
     }
 
     private void duplicatePattern() {
+        if (isCanvasEmpty()) {
+            JOptionPane.showMessageDialog(
+                    this,
+                    "Спочатку намалюйте або поставте основний фрагмент орнаменту.",
+                    "Дублювання",
+                    JOptionPane.INFORMATION_MESSAGE
+            );
+            return;
+        }
+
+        String[] options = {
+                "Вертикальна симетрія",
+                "Горизонтальна симетрія",
+                "Обидві симетрії",
+                "Дублювати праворуч"
+        };
+
+        String selected = (String) JOptionPane.showInputDialog(
+                this,
+                "Оберіть спосіб автоматичного дублювання фрагмента:",
+                "Дублювання орнаменту",
+                JOptionPane.PLAIN_MESSAGE,
+                null,
+                options,
+                options[0]
+        );
+
+        if (selected == null) return;
+
         saveState();
+        Color[][] source = copyCells();
+
+        if (selected.equals(options[0])) {
+            duplicateWithVerticalSymmetry(source);
+            verticalSymmetry = true;
+        } else if (selected.equals(options[1])) {
+            duplicateWithHorizontalSymmetry(source);
+            horizontalSymmetry = true;
+        } else if (selected.equals(options[2])) {
+            duplicateWithVerticalSymmetry(source);
+            duplicateWithHorizontalSymmetry(source);
+            duplicateWithBothSymmetries(source);
+            verticalSymmetry = true;
+            horizontalSymmetry = true;
+        } else {
+            duplicateFragmentToRight(source);
+        }
+
+        refreshToolButtons();
+        repaintAll();
+    }
+
+    private void duplicateWithVerticalSymmetry(Color[][] source) {
         for (int r = 0; r < ROWS; r++) {
-            for (int c = COLS / 2 - 1; c >= 0; c--) {
-                if (cells[r][c] != null && c + 8 < COLS) cells[r][c + 8] = cells[r][c];
+            for (int c = 0; c < COLS; c++) {
+                if (source[r][c] != null) {
+                    cells[r][COLS - 1 - c] = source[r][c];
+                }
             }
         }
-        repaintAll();
+    }
+
+    private void duplicateWithHorizontalSymmetry(Color[][] source) {
+        for (int r = 0; r < ROWS; r++) {
+            for (int c = 0; c < COLS; c++) {
+                if (source[r][c] != null) {
+                    cells[ROWS - 1 - r][c] = source[r][c];
+                }
+            }
+        }
+    }
+
+    private void duplicateWithBothSymmetries(Color[][] source) {
+        for (int r = 0; r < ROWS; r++) {
+            for (int c = 0; c < COLS; c++) {
+                if (source[r][c] != null) {
+                    cells[ROWS - 1 - r][COLS - 1 - c] = source[r][c];
+                }
+            }
+        }
+    }
+
+    private void duplicateFragmentToRight(Color[][] source) {
+        Rectangle bounds = findFilledBounds(source);
+        if (bounds == null) return;
+
+        int offset = bounds.width + 2;
+        boolean copied = false;
+        while (bounds.x + offset + bounds.width <= COLS) {
+            for (int r = bounds.y; r < bounds.y + bounds.height; r++) {
+                for (int c = bounds.x; c < bounds.x + bounds.width; c++) {
+                    if (source[r][c] != null) {
+                        int nc = c + offset;
+                        if (nc >= 0 && nc < COLS) {
+                            cells[r][nc] = source[r][c];
+                            copied = true;
+                        }
+                    }
+                }
+            }
+            offset += bounds.width + 2;
+        }
+
+        if (!copied) {
+            JOptionPane.showMessageDialog(
+                    this,
+                    "Праворуч замало місця. Спробуйте вирівняти фрагмент лівіше або оберіть симетрію.",
+                    "Дублювання",
+                    JOptionPane.INFORMATION_MESSAGE
+            );
+        }
+    }
+
+    private Rectangle findFilledBounds(Color[][] source) {
+        int minR = ROWS, minC = COLS, maxR = -1, maxC = -1;
+        for (int r = 0; r < ROWS; r++) {
+            for (int c = 0; c < COLS; c++) {
+                if (source[r][c] != null) {
+                    minR = Math.min(minR, r);
+                    minC = Math.min(minC, c);
+                    maxR = Math.max(maxR, r);
+                    maxC = Math.max(maxC, c);
+                }
+            }
+        }
+        if (maxR < 0) return null;
+        return new Rectangle(minC, minR, maxC - minC + 1, maxR - minR + 1);
     }
 
     private void centerPattern() {
@@ -1958,7 +2126,8 @@ public class ConstructorPanel extends JPanel {
         ProjectPreview project = new ProjectPreview(
                 projectName,
                 "Збережено щойно",
-                createProjectPreview()
+                createProjectPreview(),
+                copyCurrentPattern()
         );
 
         SavedProjectsPanel.addProjectToCollection(project);
@@ -1969,6 +2138,15 @@ public class ConstructorPanel extends JPanel {
                 "Збережено",
                 JOptionPane.INFORMATION_MESSAGE
         );
+    }
+
+
+    private Color[][] copyCurrentPattern() {
+        Color[][] copy = new Color[ROWS][COLS];
+        for (int r = 0; r < ROWS; r++) {
+            System.arraycopy(cells[r], 0, copy[r], 0, COLS);
+        }
+        return copy;
     }
 
     private boolean isCanvasEmpty() {
@@ -2035,8 +2213,15 @@ public class ConstructorPanel extends JPanel {
 
     private void exportPNG() {
         JFileChooser chooser = new JFileChooser();
+        chooser.setFileFilter(new FileNameExtensionFilter("PNG зображення (*.png)", "png"));
         chooser.setSelectedFile(new File("vyshyvanka_pattern.png"));
         if (chooser.showSaveDialog(this) != JFileChooser.APPROVE_OPTION) return;
+
+        File file = chooser.getSelectedFile();
+        if (!file.getName().toLowerCase(Locale.ROOT).endsWith(".png")) {
+            file = new File(file.getParentFile(), file.getName() + ".png");
+        }
+
         BufferedImage img = new BufferedImage(COLS * 16, ROWS * 16, BufferedImage.TYPE_INT_ARGB);
         Graphics2D g = img.createGraphics();
         g.setColor(Color.WHITE);
@@ -2049,11 +2234,100 @@ public class ConstructorPanel extends JPanel {
         }
         g.dispose();
         try {
-            ImageIO.write(img, "png", chooser.getSelectedFile());
+            ImageIO.write(img, "png", file);
             JOptionPane.showMessageDialog(this, "PNG успішно збережено.");
         } catch (IOException ex) {
             JOptionPane.showMessageDialog(this, "Не вдалося зберегти PNG: " + ex.getMessage(), "Помилка", JOptionPane.ERROR_MESSAGE);
         }
+    }
+
+    private void importPNG() {
+        JFileChooser chooser = new JFileChooser();
+        chooser.setFileFilter(new FileNameExtensionFilter("PNG зображення (*.png)", "png"));
+        if (chooser.showOpenDialog(this) != JFileChooser.APPROVE_OPTION) return;
+
+        try {
+            BufferedImage img = ImageIO.read(chooser.getSelectedFile());
+            if (img == null) {
+                JOptionPane.showMessageDialog(this, "Не вдалося прочитати PNG файл.", "Помилка", JOptionPane.ERROR_MESSAGE);
+                return;
+            }
+
+            if (!isCanvasEmpty()) {
+                int answer = JOptionPane.showConfirmDialog(
+                        this,
+                        "Поточну схему буде замінено даними з PNG. Продовжити?",
+                        "Відкрити PNG",
+                        JOptionPane.YES_NO_OPTION
+                );
+                if (answer != JOptionPane.YES_OPTION) return;
+            }
+
+            saveState();
+            for (int r = 0; r < ROWS; r++) {
+                Arrays.fill(cells[r], null);
+            }
+
+            for (int r = 0; r < ROWS; r++) {
+                for (int c = 0; c < COLS; c++) {
+                    cells[r][c] = readImportedCellColor(img, r, c);
+                }
+            }
+
+            pendingStamp = null;
+            pendingStampName = null;
+            pendingStampReusable = false;
+            selectedOrnamentBase = null;
+            selectedOrnamentName = null;
+            lineStart = null;
+            activeTool = Tool.PENCIL;
+            refreshToolButtons();
+            refreshCanvasSize();
+            repaintAll();
+
+            JOptionPane.showMessageDialog(this, "PNG відкрито та перенесено на сітку.");
+        } catch (IOException ex) {
+            JOptionPane.showMessageDialog(this, "Не вдалося відкрити PNG: " + ex.getMessage(), "Помилка", JOptionPane.ERROR_MESSAGE);
+        }
+    }
+
+    private Color readImportedCellColor(BufferedImage img, int row, int col) {
+        int x1 = col * img.getWidth() / COLS;
+        int x2 = (col + 1) * img.getWidth() / COLS;
+        int y1 = row * img.getHeight() / ROWS;
+        int y2 = (row + 1) * img.getHeight() / ROWS;
+
+        int padX = Math.max(0, (x2 - x1) / 4);
+        int padY = Math.max(0, (y2 - y1) / 4);
+        x1 = Math.min(img.getWidth() - 1, x1 + padX);
+        x2 = Math.max(x1 + 1, x2 - padX);
+        y1 = Math.min(img.getHeight() - 1, y1 + padY);
+        y2 = Math.max(y1 + 1, y2 - padY);
+
+        long sumR = 0, sumG = 0, sumB = 0;
+        int count = 0;
+
+        for (int y = y1; y < y2 && y < img.getHeight(); y++) {
+            for (int x = x1; x < x2 && x < img.getWidth(); x++) {
+                int argb = img.getRGB(x, y);
+                int a = (argb >>> 24) & 0xff;
+                int r = (argb >>> 16) & 0xff;
+                int g = (argb >>> 8) & 0xff;
+                int b = argb & 0xff;
+
+                if (a < 40) continue;
+                if (r > 238 && g > 238 && b > 238) continue;
+                if (Math.abs(r - 230) < 12 && Math.abs(g - 224) < 12 && Math.abs(b - 216) < 12) continue;
+
+                sumR += r;
+                sumG += g;
+                sumB += b;
+                count++;
+            }
+        }
+
+        if (count == 0) return null;
+        return new Color((int) (sumR / count), (int) (sumG / count), (int) (sumB / count));
     }
 
     private boolean[][] diamondPattern() {

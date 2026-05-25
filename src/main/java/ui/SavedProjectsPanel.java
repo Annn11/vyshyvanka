@@ -6,23 +6,26 @@ import javax.swing.*;
 import java.awt.*;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.Consumer;
 
 public class SavedProjectsPanel extends JPanel {
     private static final List<ProjectPreview> USER_PROJECTS = new ArrayList<>();
     private static final List<SavedProjectsPanel> OPEN_PANELS = new ArrayList<>();
-    private static boolean demoLoaded = false;
 
     private final JPanel gridContainer;
+    private final ConstructorPanel constructorPanel;
+    private final Consumer<String> navigator;
 
-    public SavedProjectsPanel() {
-        loadDemoProjectsOnce();
+    public SavedProjectsPanel(ConstructorPanel constructorPanel, Consumer<String> navigator) {
+        this.constructorPanel = constructorPanel;
+        this.navigator = navigator;
         OPEN_PANELS.add(this);
 
         setOpaque(false);
         setLayout(new BoxLayout(this, BoxLayout.Y_AXIS));
         setBorder(BorderFactory.createEmptyBorder(30, 40, 40, 40));
 
-        JLabel headerTitle = new JLabel("Ваша майстерня");
+        JLabel headerTitle = new JLabel("Моя колекція");
         headerTitle.setFont(new Font("SansSerif", Font.BOLD, 22));
         headerTitle.setForeground(new Color(40, 40, 40));
         headerTitle.setAlignmentX(Component.LEFT_ALIGNMENT);
@@ -30,7 +33,7 @@ public class SavedProjectsPanel extends JPanel {
 
         add(Box.createVerticalStrut(4));
 
-        JLabel headerDesc = new JLabel("Тут зберігаються всі створені вами схеми вишивки. Ви можете продовжити редагування у будь-який момент.");
+        JLabel headerDesc = new JLabel("Тут зберігатимуться орнаменти, які ви створили у конструкторі.");
         headerDesc.setFont(new Font("SansSerif", Font.PLAIN, 14));
         headerDesc.setForeground(new Color(110, 110, 110));
         headerDesc.setAlignmentX(Component.LEFT_ALIGNMENT);
@@ -47,58 +50,16 @@ public class SavedProjectsPanel extends JPanel {
     }
 
     public static void addProjectToCollection(ProjectPreview project) {
-        loadDemoProjectsOnce();
+        if (project == null) return;
         USER_PROJECTS.add(0, project);
-
-        for (SavedProjectsPanel panel : new ArrayList<>(OPEN_PANELS)) {
-            panel.renderGrid();
-        }
-    }
-
-    private static void loadDemoProjectsOnce() {
-        if (demoLoaded) return;
-        demoLoaded = true;
-
-        Color R = new Color(211, 47, 47);
-        Color B = new Color(40, 40, 40);
-        Color W = new Color(220, 215, 205);
-        Color G = new Color(30, 120, 60);
-
-        Color[][] pattern1 = {
-                {null, W, null, null, W, null},
-                {W, W, W, W, W, W},
-                {null, W, W, W, W, null},
-                {W, W, W, W, W, W},
-                {null, W, null, null, W, null}
-        };
-
-        Color[][] pattern2 = {
-                {B, null, B, B, null, B},
-                {null, R, null, null, R, null},
-                {B, null, B, B, null, B},
-                {null, R, null, null, R, null},
-                {B, null, B, B, null, B}
-        };
-
-        Color[][] pattern3 = {
-                {G, G, null, null, G, G},
-                {null, null, R, R, null, null},
-                {G, G, null, null, G, G}
-        };
-
-        USER_PROJECTS.add(new ProjectPreview("Моя сорочка (Полтавський стиль)", "Збережено: 2 години тому", pattern1));
-        USER_PROJECTS.add(new ProjectPreview("Борщівський рукав v2", "Збережено: вчора", pattern2));
-        USER_PROJECTS.add(new ProjectPreview("Весняний орнамент манжету", "Збережено: 3 дні тому", pattern3));
+        renderAllPanels();
     }
 
     private void renderGrid() {
         gridContainer.removeAll();
 
         if (USER_PROJECTS.isEmpty()) {
-            JLabel empty = new JLabel("Поки що немає збережених проєктів.");
-            empty.setFont(new Font("SansSerif", Font.PLAIN, 14));
-            empty.setForeground(new Color(120, 112, 104));
-            gridContainer.add(empty);
+            gridContainer.add(createEmptyPanel());
         } else {
             for (ProjectPreview project : new ArrayList<>(USER_PROJECTS)) {
                 gridContainer.add(createSavedProjectCard(project));
@@ -109,11 +70,36 @@ public class SavedProjectsPanel extends JPanel {
         gridContainer.repaint();
     }
 
+    private JPanel createEmptyPanel() {
+        RoundedPanel empty = new RoundedPanel(22, Color.WHITE);
+        empty.setLayout(new BoxLayout(empty, BoxLayout.Y_AXIS));
+        empty.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createLineBorder(new Color(236, 229, 221), 1),
+                BorderFactory.createEmptyBorder(28, 34, 28, 34)
+        ));
+        empty.setPreferredSize(new Dimension(520, 150));
+
+        JLabel title = new JLabel("Колекція поки що порожня");
+        title.setFont(new Font("SansSerif", Font.BOLD, 18));
+        title.setForeground(new Color(55, 48, 42));
+        title.setAlignmentX(Component.LEFT_ALIGNMENT);
+
+        JLabel text = new JLabel("Створіть орнамент у вкладці «Конструктор» і натисніть «Зберегти проект».");
+        text.setFont(new Font("SansSerif", Font.PLAIN, 13));
+        text.setForeground(new Color(120, 112, 104));
+        text.setAlignmentX(Component.LEFT_ALIGNMENT);
+
+        empty.add(title);
+        empty.add(Box.createVerticalStrut(8));
+        empty.add(text);
+        return empty;
+    }
+
     private JPanel createSavedProjectCard(ProjectPreview project) {
         RoundedPanel card = new RoundedPanel(20, Color.WHITE);
         card.setLayout(new BorderLayout(15, 0));
         card.setBorder(BorderFactory.createEmptyBorder(16, 18, 16, 18));
-        card.setPreferredSize(new Dimension(340, 95));
+        card.setPreferredSize(new Dimension(360, 105));
 
         PatternPreviewPanel preview = new PatternPreviewPanel(project.getPatternPreview());
         card.add(preview, BorderLayout.WEST);
@@ -152,6 +138,7 @@ public class SavedProjectsPanel extends JPanel {
         };
         openBtn.setToolTipText("Відкрити в конструкторі");
         configureIconButton(openBtn, new Color(140, 110, 80));
+        openBtn.addActionListener(e -> openProjectInConstructor(project));
 
         JButton deleteBtn = new JButton("✕") {
             @Override
@@ -186,6 +173,15 @@ public class SavedProjectsPanel extends JPanel {
         card.add(controls, BorderLayout.EAST);
 
         return card;
+    }
+
+    private void openProjectInConstructor(ProjectPreview project) {
+        if (constructorPanel != null) {
+            constructorPanel.loadSavedProject(project);
+        }
+        if (navigator != null) {
+            navigator.accept("CONSTRUCTOR");
+        }
     }
 
     private static void renderAllPanels() {

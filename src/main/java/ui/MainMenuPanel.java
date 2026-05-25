@@ -42,16 +42,8 @@ public class MainMenuPanel extends JPanel {
         left.add(createHeroBlock());
         left.add(Box.createVerticalStrut(20));
         left.add(createFeatureCards());
-        left.add(Box.createVerticalStrut(20));
-        left.add(createBenefitsStrip());
 
-        JPanel right = new JPanel();
-        right.setOpaque(false);
-        right.setLayout(new BoxLayout(right, BoxLayout.Y_AXIS));
-        right.setPreferredSize(new Dimension(360, 700));
-        right.add(createRecentProjectsCard());
-        right.add(Box.createVerticalStrut(22));
-        right.add(createInspirationCard());
+        JPanel right = createCleanRightPanel();
 
         page.add(left, BorderLayout.CENTER);
         page.add(right, BorderLayout.EAST);
@@ -104,7 +96,7 @@ public class MainMenuPanel extends JPanel {
         buttons.setAlignmentX(Component.LEFT_ALIGNMENT);
         JButton start = solidButton("Почати створення   →", 205, 50);
         start.addActionListener(e -> navigator.accept("CONSTRUCTOR"));
-        JButton more = heroInfoButton("Дізнатися більше про вишиванку", "/hero_button_book_icon.png", 225, 48, 14);
+        JButton more = heroInfoButton("Дізнатися більше про вишиванку", 292, 50, 14);
         more.addActionListener(e -> navigator.accept("HISTORY_PAGE"));
         buttons.add(start);
         buttons.add(more);
@@ -190,6 +182,17 @@ public class MainMenuPanel extends JPanel {
         card.add(link);
         return card;
     }
+
+    private JPanel createCleanRightPanel() {
+        RoundedPanel right = new RoundedPanel(22, Color.WHITE);
+        right.setLayout(new BorderLayout());
+        right.setBorder(new EmptyBorder(0, 0, 0, 0));
+        right.setPreferredSize(new Dimension(360, 700));
+        right.setMaximumSize(new Dimension(360, Integer.MAX_VALUE));
+        right.setOpaque(false);
+        return right;
+    }
+
     private JPanel createRecentProjectsCard() {
         RoundedPanel card = sideCard("Останні проєкти", "Показати всі", "SAVED", 350);
         card.add(projectItem(new PixelBadge(48, 0), "Червоний орнамент", "Змінено 2 год тому", "CONSTRUCTOR"));
@@ -388,13 +391,17 @@ public class MainMenuPanel extends JPanel {
     }
 
 
-    private JButton heroInfoButton(String text, String iconPath, int w, int h, int fontSize) {
+    private JButton heroInfoButton(String text, int w, int h, int fontSize) {
         JButton b = new JButton(text) {
             @Override protected void paintComponent(Graphics g) {
                 Graphics2D g2 = (Graphics2D) g.create();
                 g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-                g2.setColor(new Color(255, 253, 250));
+
+                // Білий фон кнопки з округленими краями
+                g2.setColor(Color.WHITE);
                 g2.fillRoundRect(0, 0, getWidth() - 1, getHeight() - 1, 13, 13);
+
+                // Легка бежева обводка як у дизайні
                 g2.setColor(new Color(230, 221, 212));
                 g2.drawRoundRect(0, 0, getWidth() - 1, getHeight() - 1, 13, 13);
                 g2.dispose();
@@ -402,8 +409,9 @@ public class MainMenuPanel extends JPanel {
             }
         };
 
-        b.setFont(new Font("SansSerif", Font.PLAIN, fontSize));
+        b.setFont(new Font("SansSerif", Font.BOLD, fontSize));
         b.setForeground(new Color(65, 61, 56));
+        b.setIcon(new BookButtonIcon(24, new Color(65, 61, 56)));
         b.setContentAreaFilled(false);
         b.setBorderPainted(false);
         b.setFocusPainted(false);
@@ -411,19 +419,9 @@ public class MainMenuPanel extends JPanel {
         b.setPreferredSize(new Dimension(w, h));
         b.setMaximumSize(new Dimension(w, h));
         b.setHorizontalAlignment(SwingConstants.LEFT);
-        b.setIconTextGap(12);
+        b.setIconTextGap(10);
         b.setMargin(new Insets(0, 18, 0, 14));
         b.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
-
-        try {
-            BufferedImage img = loadImage(iconPath);
-            if (img != null) {
-                Image scaled = img.getScaledInstance(24, 24, Image.SCALE_SMOOTH);
-                b.setIcon(new ImageIcon(scaled));
-            }
-        } catch (Exception ignored) {
-        }
-
         return b;
     }
 
@@ -576,6 +574,53 @@ public class MainMenuPanel extends JPanel {
             }
 
             return lines;
+        }
+    }
+
+
+    private static class BookButtonIcon implements Icon {
+        private final int size;
+        private final Color color;
+
+        BookButtonIcon(int size, Color color) {
+            this.size = size;
+            this.color = color;
+        }
+
+        @Override public int getIconWidth() { return size; }
+        @Override public int getIconHeight() { return size; }
+
+        @Override
+        public void paintIcon(Component c, Graphics g, int x, int y) {
+            Graphics2D g2 = (Graphics2D) g.create();
+            g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+            g2.setColor(color);
+            g2.setStroke(new BasicStroke(2.4f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
+
+            int top = y + 4;
+            int bottom = y + size - 4;
+            int mid = x + size / 2;
+            int left = x + 2;
+            int right = x + size - 2;
+
+            java.awt.geom.Path2D leftPage = new java.awt.geom.Path2D.Double();
+            leftPage.moveTo(mid, top + 2);
+            leftPage.curveTo(mid - 4, top, left + 6, top, left + 3, top + 3);
+            leftPage.lineTo(left + 3, bottom - 2);
+            leftPage.curveTo(left + 8, bottom - 5, mid - 4, bottom - 4, mid, bottom - 1);
+            leftPage.closePath();
+
+            java.awt.geom.Path2D rightPage = new java.awt.geom.Path2D.Double();
+            rightPage.moveTo(mid, top + 2);
+            rightPage.curveTo(mid + 4, top, right - 6, top, right - 3, top + 3);
+            rightPage.lineTo(right - 3, bottom - 2);
+            rightPage.curveTo(right - 8, bottom - 5, mid + 4, bottom - 4, mid, bottom - 1);
+            rightPage.closePath();
+
+            g2.draw(leftPage);
+            g2.draw(rightPage);
+            g2.drawLine(mid, top + 2, mid, bottom - 1);
+            g2.dispose();
         }
     }
 

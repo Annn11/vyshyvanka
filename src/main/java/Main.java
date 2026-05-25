@@ -12,7 +12,7 @@ public class Main {
         } catch (Exception ignored) {}
 
         SwingUtilities.invokeLater(() -> {
-            JFrame frame = new JFrame("Вишивай легко");
+            JFrame frame = new JFrame("Вишивай легко — Шкут Анна ІПЗ-1");
             frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
             frame.setSize(1360, 860);
             frame.setMinimumSize(new Dimension(1120, 720));
@@ -39,7 +39,7 @@ public class Main {
             ConstructorPanel constructorPanel = new ConstructorPanel();
             pages.add(constructorPanel, "CONSTRUCTOR");
             pages.add(wrapScrollable(new IdeasPanel(navigate, constructorPanel)), "IDEAS");
-            pages.add(wrapScrollable(new SavedProjectsPanel()), "SAVED");
+            pages.add(wrapScrollable(new SavedProjectsPanel(constructorPanel, navigate)), "SAVED");
             pages.add(new HistoryPage(pages, cardLayout), "HISTORY_PAGE");
 
             root.add(pages, BorderLayout.CENTER);
